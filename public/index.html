@@ -1,0 +1,1342 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Atelier — портфолио художника</title>
+<meta name="description" content="Портфолио художника: оригиналы, гравюры, репродукции." />
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.25.6/babel.min.js"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+<script>
+  tailwind.config = {
+    theme: { extend: {
+      fontFamily: {
+        display: ['"Cormorant Garamond"', 'serif'],
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+      },
+      colors: { ink:'#1a1a1a', paper:'#f7f4ee', muted:'#8a8378', accent:'#b08d57' }
+    }}
+  }
+</script>
+
+<style>
+  html { scroll-behavior: smooth; }
+  body { background:#f7f4ee; color:#1a1a1a; font-family: Inter, sans-serif; }
+  .fade-in { animation: fade .6s ease both; }
+  @keyframes fade { from { opacity:0; transform: translateY(8px);} to {opacity:1; transform:none;} }
+  .hover-zoom img { transition: transform .8s cubic-bezier(.2,.8,.2,1); }
+  .hover-zoom:hover img { transform: scale(1.04); }
+  .artwork-frame { box-shadow: 0 20px 40px -20px rgba(0,0,0,.25); }
+  ::selection { background:#b08d57; color:#fff; }
+  .hairline { border-color: rgba(26,26,26,.12); }
+  .grain::before {
+    content:''; position:fixed; inset:0; pointer-events:none; opacity:.035; z-index:1;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+</style>
+
+<!-- ===================== API-КЛИЕНТ ===================== -->
+<script>
+  window.API = {
+    base: '/api',
+    token() { return localStorage.getItem('token'); },
+    setToken(t) { t ? localStorage.setItem('token', t) : localStorage.removeItem('token'); },
+    async req(path, { method = 'GET', body, headers = {} } = {}) {
+      const h = { ...headers };
+      if (body && !(body instanceof FormData)) h['Content-Type'] = 'application/json';
+      const t = this.token();
+      if (t) h['Authorization'] = `Bearer ${t}`;
+      const res = await fetch(this.base + path, {
+        method, headers: h,
+        body: body instanceof FormData ? body : (body ? JSON.stringify(body) : undefined),
+      });
+      if (res.status === 401) { this.setToken(null); window.dispatchEvent(new Event('auth:logout')); }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(err.error || 'Ошибка запроса');
+      }
+      return res.status === 204 ? null : res.json();
+    },
+    login: (email, password) => API.req('/auth/login', { method:'POST', body:{ email, password } }),
+    me: () => API.req('/auth/me'),
+    listArtworks: (f = {}) => {
+      const q = new URLSearchParams(Object.entries(f).filter(([,v]) => v !== undefined && v !== null && v !== '')).toString();
+      return API.req('/artworks' + (q ? '?' + q : ''));
+    },
+    getArtwork: (slug) => API.req(`/artworks/${slug}`),
+    createArtwork: (d) => API.req('/artworks', { method:'POST', body:d }),
+    updateArtwork: (id, d) => API.req(`/artworks/${id}`, { method:'PUT', body:d }),
+    deleteArtwork: (id) => API.req(`/artworks/${id}`, { method:'DELETE' }),
+    listTechniques: () => API.req('/techniques'),
+    createTechnique: (d) => API.req('/techniques', { method:'POST', body:d }),
+    deleteTechnique: (id) => API.req(`/techniques/${id}`, { method:'DELETE' }),
+    getAbout: () => API.req('/about'),
+    updateAbout: (d) => API.req('/about', { method:'PUT', body:d }),
+    getContacts: () => API.req('/contacts'),
+    updateContacts: (d) => API.req('/contacts', { method:'PUT', body:d }),
+    upload: async (file) => {
+      const fd = new FormData(); fd.append('file', file);
+      return API.req('/uploads', { method:'POST', body: fd });
+    }
+  };
+</script>
+</head>
+<body class="grain">
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useMemo, createContext, useContext, useRef } = React;
+
+/* ============== Роутер ============== */
+function useRoute() {
+  const [route, setRoute] = useState(parseHash());
+  useEffect(() => {
+    const onHash = () => setRoute(parseHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+  return route;
+}
+function parseHash() { return window.location.hash.replace(/^#/, '') || '/'; }
+function navigate(path) { window.location.hash = path; window.scrollTo({ top:0, behavior:'smooth' }); }
+
+/* ============== Иконки ============== */
+const Icon = {
+  Menu: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 6h18M3 12h18M3 18h18"/></svg>,
+  Close: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M6 6l12 12M18 6L6 18"/></svg>,
+  Arrow: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>,
+  ArrowLeft: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>,
+  Lock: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>,
+  Check: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M5 13l4 4L19 7"/></svg>,
+};
+
+/* ============== Store через API ============== */
+const StoreCtx = createContext(null);
+function useStore() { return useContext(StoreCtx); }
+
+function StoreProvider({ children }) {
+  const [artworks, setArtworks] = useState([]);
+  const [techniques, setTechniques] = useState([]);
+  const [about, setAbout] = useState({});
+  const [contacts, setContacts] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const loadAll = async () => {
+    try {
+      setLoading(true);
+      const [a, t, ab, c] = await Promise.all([
+        API.listArtworks(),
+        API.listTechniques(),
+        API.getAbout(),
+        API.getContacts(),
+      ]);
+      setArtworks(a); setTechniques(t); setAbout(ab); setContacts(c);
+      setError(null);
+    } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { loadAll(); }, []);
+
+  const api = {
+    loading, error,
+    artworks, techniques, about, contacts,
+    refresh: loadAll,
+
+    listArtworks: (filters = {}) => {
+      let list = [...artworks];
+      if (filters.category) list = list.filter(a => a.category === filters.category);
+      if (filters.technique) list = list.filter(a => (a.techniques||[]).includes(filters.technique));
+      if (filters.year) list = list.filter(a => a.year === Number(filters.year));
+      if (filters.available === true) list = list.filter(a => a.status === 'available');
+      if (filters.featured) list = list.filter(a => a.featured);
+      return list;
+    },
+    getArtwork: (slug) => artworks.find(a => a.slug === slug),
+
+    createArtwork: async (data) => {
+      const created = await API.createArtwork(data);
+      setArtworks(prev => [created, ...prev]);
+      return created;
+    },
+    updateArtwork: async (id, data) => {
+      const updated = await API.updateArtwork(id, data);
+      setArtworks(prev => prev.map(a => a.id === id ? updated : a));
+      return updated;
+    },
+    deleteArtwork: async (id) => {
+      await API.deleteArtwork(id);
+      setArtworks(prev => prev.filter(a => a.id !== id));
+    },
+
+    createTechnique: async (t) => {
+      const created = await API.createTechnique(t);
+      setTechniques(prev => [...prev, created]);
+    },
+    deleteTechnique: async (id) => {
+      await API.deleteTechnique(id);
+      setTechniques(prev => prev.filter(t => t.id !== id));
+    },
+
+    setAbout: async (data) => { const saved = await API.updateAbout(data); setAbout(saved); },
+    setContacts: async (data) => { const saved = await API.updateContacts(data); setContacts(saved); },
+  };
+
+  return <StoreCtx.Provider value={api}>{children}</StoreCtx.Provider>;
+}
+
+/* ============== Header ============== */
+function Header() {
+  const route = useRoute();
+  const [open, setOpen] = useState(false);
+  const items = [
+    { label: 'О нас', path: '/about' },
+    { label: 'По техникам', path: '/techniques' },
+    { label: 'Оригиналы', path: '/originals' },
+    { label: 'Серии', path: '/series' },
+    { label: 'Гравюры', path: '/engravings' },
+    { label: 'Репродукции', path: '/reproductions' },
+    { label: 'Контакты', path: '/contacts' },
+  ];
+  const isActive = (p) => route === p || route.startsWith(p + '/');
+
+  return (
+    <header className="sticky top-0 z-40 bg-paper/85 backdrop-blur border-b hairline">
+      <div className="max-w-[1400px] mx-auto px-6 lg:px-10 h-20 flex items-center justify-between">
+        <button onClick={() => navigate('/')} className="text-left">
+          <div className="font-display text-2xl tracking-wide">Studio Asnieres</div>
+          <div className="text-[10px] tracking-[0.3em] text-muted uppercase -mt-1">Atelier · Portfolio</div>
+        </button>
+
+        <nav className="hidden lg:flex items-center gap-8">
+          {items.map(i => (
+            <button key={i.path} onClick={() => navigate(i.path)}
+              className={`text-sm tracking-wide transition-colors ${isActive(i.path) ? 'text-ink' : 'text-muted hover:text-ink'}`}>
+              {i.label}
+            </button>
+          ))}
+          <button onClick={() => navigate('/admin')}
+            className="ml-2 w-9 h-9 rounded-full border hairline flex items-center justify-center text-muted hover:text-ink hover:border-ink/40"
+            title="Админка">
+            <Icon.Lock className="w-4 h-4" />
+          </button>
+        </nav>
+
+        <button className="lg:hidden p-2" onClick={() => setOpen(true)} aria-label="Меню">
+          <Icon.Menu className="w-6 h-6" />
+        </button>
+      </div>
+
+      {open && (
+        <div className="fixed inset-0 z-50 bg-paper flex flex-col">
+          <div className="h-20 px-6 flex items-center justify-between border-b hairline">
+            <div className="font-display text-2xl">Меню</div>
+            <button onClick={() => setOpen(false)} className="p-2"><Icon.Close className="w-6 h-6"/></button>
+          </div>
+          <nav className="flex-1 flex flex-col items-start justify-center px-8 gap-6">
+            {items.map(i => (
+              <button key={i.path} onClick={() => { setOpen(false); navigate(i.path); }}
+                className="font-display text-4xl tracking-wide hover:text-accent transition">
+                {i.label}
+              </button>
+            ))}
+            <button onClick={() => { setOpen(false); navigate('/admin'); }} className="mt-6 text-sm text-muted inline-flex items-center gap-2">
+              <Icon.Lock className="w-4 h-4"/> Админка
+            </button>
+          </nav>
+        </div>
+      )}
+    </header>
+  );
+}
+
+/* ============== Footer ============== */
+function Footer() {
+  const { contacts } = useStore();
+  return (
+    <footer className="mt-32 border-t hairline">
+      <div className="max-w-[1400px] mx-auto px-6 lg:px-10 py-16 grid md:grid-cols-3 gap-10">
+        <div>
+          <div className="font-display text-3xl">Anna Morozova</div>
+          <p className="text-sm text-muted mt-3 max-w-xs">Портфолио и каталог работ.</p>
+        </div>
+        <div className="text-sm">
+          <div className="text-muted uppercase tracking-widest text-[10px] mb-4">Связь</div>
+          <a href={`mailto:${contacts.email||''}`} className="block hover:text-accent">{contacts.email}</a>
+          {contacts.instagram && <a href={contacts.instagramUrl} className="block hover:text-accent mt-1">{contacts.instagram}</a>}
+          {contacts.telegram && <div className="mt-1">{contacts.telegram}</div>}
+        </div>
+        <div className="text-sm">
+          <div className="text-muted uppercase tracking-widest text-[10px] mb-4">Студия</div>
+          <div>{contacts.city}</div>
+          <button onClick={() => navigate('/contacts')} className="mt-3 inline-flex items-center gap-2 hover:text-accent">
+            Написать <Icon.Arrow className="w-4 h-4"/>
+          </button>
+        </div>
+      </div>
+      <div className="border-t hairline">
+        <div className="max-w-[1400px] mx-auto px-6 lg:px-10 py-6 text-xs text-muted flex flex-wrap justify-between gap-4">
+          <div>© {new Date().getFullYear()} Anna Morozova.</div>
+          <button onClick={() => navigate('/admin')} className="hover:text-ink">Админ-панель</button>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+/* ============== Общие UI ============== */
+function StatusBadge({ status }) {
+  const map = {
+    available:    { label:'Доступно',    cls:'bg-emerald-50 text-emerald-800 border-emerald-200' },
+    sold:         { label:'Продано',     cls:'bg-red-50 text-red-800 border-red-200' },
+    not_for_sale: { label:'Не продаётся', cls:'bg-neutral-100 text-neutral-600 border-neutral-200' },
+  };
+  const s = map[status] || map.not_for_sale;
+  return <span className={`inline-flex items-center text-[11px] tracking-wider uppercase px-2.5 py-1 rounded-full border ${s.cls}`}>{s.label}</span>;
+}
+
+function LazyImage({ src, alt, className = '', ratio }) {
+  const ref = useRef(null);
+  const [loaded, setLoaded] = useState(false);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current; if (!el) return;
+    const io = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) { setVisible(true); io.disconnect(); }
+    }, { rootMargin:'200px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref} className={`relative overflow-hidden bg-neutral-200 ${className}`} style={ratio ? { aspectRatio: ratio } : undefined}>
+      {visible && src && (
+        <img src={src} alt={alt} loading="lazy"
+          onLoad={() => setLoaded(true)}
+          className={`w-full h-full object-cover transition-opacity duration-700 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+        />
+      )}
+    </div>
+  );
+}
+
+function ArtworkCard({ artwork, onClick }) {
+  const cover = artwork.images?.[0];
+  return (
+    <article className="group cursor-pointer fade-in" onClick={onClick}>
+      <div className="hover-zoom overflow-hidden artwork-frame bg-neutral-100">
+        <LazyImage src={cover?.url} alt={cover?.alt || artwork.title} ratio="4/5" />
+      </div>
+      <div className="mt-4 flex items-start justify-between gap-4">
+        <div>
+          <h3 className="font-display text-xl leading-tight">{artwork.title}</h3>
+          <div className="text-sm text-muted mt-1">
+            {artwork.year}
+            {artwork.techniqueNames?.length ? <> · {artwork.techniqueNames.join(', ')}</> : null}
+          </div>
+          {(artwork.height || artwork.width) && (
+            <div className="text-xs text-muted mt-0.5">{artwork.height}×{artwork.width} см</div>
+          )}
+        </div>
+        {artwork.status === 'available' && artwork.price && (
+          <div className="text-sm whitespace-nowrap">{artwork.price} {artwork.currency}</div>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function SectionTitle({ eyebrow, title, subtitle, action }) {
+  return (
+    <div className="flex flex-wrap items-end justify-between gap-6 mb-10">
+      <div>
+        {eyebrow && <div className="text-[11px] uppercase tracking-[0.3em] text-muted mb-3">{eyebrow}</div>}
+        <h2 className="font-display text-4xl md:text-5xl leading-[1.05]">{title}</h2>
+        {subtitle && <p className="text-muted mt-4 max-w-2xl">{subtitle}</p>}
+      </div>
+      {action}
+    </div>
+  );
+}
+
+/* ============== ГЛАВНАЯ ============== */
+function HomePage() {
+  const store = useStore();
+  const featured = store.listArtworks({ featured: true });
+  const techniques = store.techniques;
+
+  return (
+    <div>
+      <section className="max-w-[1400px] mx-auto px-6 lg:px-10 pt-16 pb-20 grid lg:grid-cols-12 gap-10 items-end">
+        <div className="lg:col-span-5">
+          <div className="text-[11px] uppercase tracking-[0.3em] text-muted mb-6">Портфолио · 2020—2024</div>
+          <h1 className="font-display text-6xl md:text-7xl leading-[0.95]">
+            Свет,<br/>бумага,<br/><em className="italic text-accent">повтор</em>.
+          </h1>
+          <p className="mt-8 text-muted text-lg max-w-md">
+            Работы в пастели, акварели и печатной графике.
+          </p>
+          <div className="mt-10 flex flex-wrap gap-4">
+            <button onClick={() => navigate('/originals')} className="group inline-flex items-center gap-3 bg-ink text-paper px-6 py-3 rounded-full hover:bg-accent transition">
+              Смотреть оригиналы <Icon.Arrow className="w-4 h-4 group-hover:translate-x-1 transition"/>
+            </button>
+            <button onClick={() => navigate('/about')} className="inline-flex items-center gap-2 px-6 py-3 rounded-full border hairline hover:border-ink/50 transition">
+              О художнике
+            </button>
+          </div>
+        </div>
+
+        <div className="lg:col-span-7 grid grid-cols-2 gap-4">
+          {featured.slice(0,2).map((a, i) => (
+            <div key={a.id} className={i === 1 ? 'translate-y-10' : ''}>
+              <button onClick={() => navigate(`/artworks/${a.slug}`)} className="block w-full text-left group">
+                <div className="hover-zoom artwork-frame overflow-hidden">
+                  <LazyImage src={a.images?.[0]?.url} alt={a.images?.[0]?.alt || a.title} ratio="4/5" />
+                </div>
+                <div className="mt-3 font-display text-lg">{a.title}</div>
+                <div className="text-xs text-muted">{a.year}</div>
+              </button>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="border-y hairline">
+        <div className="max-w-[1400px] mx-auto px-6 lg:px-10 grid md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[rgba(26,26,26,.12)]">
+          {[
+            { t:'Оригиналы', p:'/originals', d:'Уникальные работы в единственном экземпляре.' },
+            { t:'Гравюры',   p:'/engravings', d:'Линогравюра, ксилография, офорт.' },
+            { t:'Репродукции', p:'/reproductions', d:'Печатные копии в нескольких размерах.' },
+          ].map(s => (
+            <button key={s.p} onClick={() => navigate(s.p)} className="group text-left p-10 hover:bg-white/40 transition">
+              <div className="flex items-center justify-between">
+                <h3 className="font-display text-3xl">{s.t}</h3>
+                <Icon.Arrow className="w-5 h-5 text-muted group-hover:text-ink group-hover:translate-x-1 transition"/>
+              </div>
+              <p className="text-sm text-muted mt-3 max-w-xs">{s.d}</p>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="max-w-[1400px] mx-auto px-6 lg:px-10 py-24">
+        <SectionTitle
+          eyebrow="Избранное"
+          title="Работы, которые стоит увидеть"
+          action={<button onClick={() => navigate('/originals')} className="text-sm inline-flex items-center gap-2 hover:text-accent">Все работы <Icon.Arrow className="w-4 h-4"/></button>}
+        />
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-14">
+          {store.listArtworks().slice(0,6).map(a => (
+            <ArtworkCard key={a.id} artwork={a} onClick={() => navigate(`/artworks/${a.slug}`)} />
+          ))}
+        </div>
+      </section>
+
+      <section className="bg-white/50 border-y hairline">
+        <div className="max-w-[1400px] mx-auto px-6 lg:px-10 py-24">
+          <SectionTitle eyebrow="Медиа" title="По техникам" />
+          <div className="flex flex-wrap gap-3">
+            {techniques.map(t => (
+              <button key={t.slug} onClick={() => navigate(`/techniques/${t.slug}`)}
+                className="px-5 py-3 rounded-full border hairline hover:border-ink hover:bg-ink hover:text-paper transition text-sm">
+                {t.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/* ============== О НАС ============== */
+function AboutPage() {
+  const { about } = useStore();
+  return (
+    <div className="max-w-[1400px] mx-auto px-6 lg:px-10 py-16">
+      <div className="grid lg:grid-cols-12 gap-12">
+        <div className="lg:col-span-5">
+          <div className="sticky top-28">
+            <div className="artwork-frame overflow-hidden">
+              <LazyImage src={about.photo} alt={`Фотография — ${about.name||''}`} ratio="4/5" />
+            </div>
+            <div className="mt-6 font-display text-3xl">{about.name}</div>
+            <div className="text-muted">Художник-график</div>
+          </div>
+        </div>
+        <div className="lg:col-span-7 fade-in">
+          <div className="text-[11px] uppercase tracking-[0.3em] text-muted">О нас</div>
+          <h1 className="font-display text-5xl md:text-6xl mt-4 leading-[1.02]">{about.name}</h1>
+          <div className="mt-10 space-y-10 text-lg leading-relaxed">
+            <p>{about.shortBio}</p>
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.3em] text-muted mb-3">Образование</div>
+              <p>{about.education}</p>
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.3em] text-muted mb-3">Практика</div>
+              <p>{about.practice}</p>
+            </div>
+            {about.exhibitions?.length > 0 && (
+              <div>
+                <div className="text-[11px] uppercase tracking-[0.3em] text-muted mb-3">Выставки и проекты</div>
+                <ul className="space-y-2">
+                  {about.exhibitions.map((e, i) => (
+                    <li key={i} className="flex gap-4 text-base">
+                      <span className="text-muted tabular-nums">{e.slice(0,4)}</span>
+                      <span>{e.slice(7)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============== ТЕХНИКИ ============== */
+function TechniquesPage() {
+  const store = useStore();
+  const [active, setActive] = useState(store.techniques[0]?.slug);
+  useEffect(() => { if (!active && store.techniques[0]) setActive(store.techniques[0].slug); }, [store.techniques]);
+  const list = store.listArtworks({ technique: active });
+
+  return (
+    <div className="max-w-[1400px] mx-auto px-6 lg:px-10 py-16">
+      <SectionTitle eyebrow="Каталог" title="По техникам" subtitle="Выберите технику — откроется галерея связанных работ." />
+      <div className="flex flex-wrap gap-2 mb-14">
+        {store.techniques.map(t => (
+          <button key={t.slug} onClick={() => setActive(t.slug)}
+            className={`px-5 py-2.5 rounded-full border text-sm transition ${active===t.slug ? 'bg-ink text-paper border-ink' : 'border-[rgba(26,26,26,.15)] hover:border-ink'}`}>
+            {t.name}
+          </button>
+        ))}
+      </div>
+      {list.length ? (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-14">
+          {list.map(a => <ArtworkCard key={a.id} artwork={a} onClick={() => navigate(`/artworks/${a.slug}`)} />)}
+        </div>
+      ) : <div className="text-center py-24 text-muted">В этой технике пока нет работ.</div>}
+    </div>
+  );
+}
+
+function TechniqueDetailPage({ slug }) {
+  const store = useStore();
+  const tech = store.techniques.find(t => t.slug === slug);
+  const list = store.listArtworks({ technique: slug });
+  if (!tech) return <div className="p-20 text-center">Техника не найдена</div>;
+  return (
+    <div className="max-w-[1400px] mx-auto px-6 lg:px-10 py-16">
+      <button onClick={() => navigate('/techniques')} className="text-sm text-muted inline-flex items-center gap-2 hover:text-ink mb-8">
+        <Icon.ArrowLeft className="w-4 h-4"/> Все техники
+      </button>
+      <SectionTitle eyebrow="Техника" title={tech.name} />
+      {list.length ? (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-14">
+          {list.map(a => <ArtworkCard key={a.id} artwork={a} onClick={() => navigate(`/artworks/${a.slug}`)} />)}
+        </div>
+      ) : <div className="text-center py-24 text-muted">Пока пусто.</div>}
+    </div>
+  );
+}
+
+/* ============== КАТЕГОРИИ ============== */
+function CategoryPage({ category, title, subtitle }) {
+  const store = useStore();
+  const list = store.listArtworks({ category });
+  return (
+    <div className="max-w-[1400px] mx-auto px-6 lg:px-10 py-16">
+      <SectionTitle eyebrow="Каталог" title={title} subtitle={subtitle} />
+      {list.length ? (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-14">
+          {list.map(a => <ArtworkCard key={a.id} artwork={a} onClick={() => navigate(`/artworks/${a.slug}`)} />)}
+        </div>
+      ) : <div className="text-center py-24 text-muted">Пока нет работ в этом разделе.</div>}
+    </div>
+  );
+}
+
+/* ============== СЕРИИ ============== */
+function SeriesPage() {
+  const store = useStore();
+  const groups = useMemo(() => {
+    const map = {};
+    store.artworks.forEach(a => { (map[a.year] ||= []).push(a); });
+    return Object.entries(map).sort((a,b) => b[0]-a[0]);
+  }, [store.artworks]);
+
+  return (
+    <div className="max-w-[1400px] mx-auto px-6 lg:px-10 py-16">
+      <SectionTitle eyebrow="Каталог" title="Серии" subtitle="Работы, объединённые временем и материалом." />
+      <div className="space-y-20">
+        {groups.map(([year, items]) => (
+          <div key={year}>
+            <div className="flex items-baseline justify-between border-b hairline pb-3 mb-8">
+              <h3 className="font-display text-3xl">Серия {year}</h3>
+              <div className="text-sm text-muted">{items.length} работ</div>
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-14">
+              {items.map(a => <ArtworkCard key={a.id} artwork={a} onClick={() => navigate(`/artworks/${a.slug}`)} />)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ============== КАРТОЧКА ПРОИЗВЕДЕНИЯ ============== */
+function ArtworkPage({ slug }) {
+  const store = useStore();
+  const a = store.getArtwork(slug);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [lightbox, setLightbox] = useState(false);
+  useEffect(() => { setActiveIdx(0); }, [slug]);
+
+  if (!a) return (
+    <div className="max-w-3xl mx-auto py-32 text-center">
+      <h1 className="font-display text-4xl mb-4">Работа не найдена</h1>
+      <button onClick={() => navigate('/')} className="text-accent hover:underline">На главную</button>
+    </div>
+  );
+
+  const cover = a.images[activeIdx] || a.images[0];
+  const all = store.listArtworks({ category: a.category });
+  const idx = all.findIndex(x => x.id === a.id);
+  const prev = idx > 0 ? all[idx-1] : null;
+  const next = idx >= 0 && idx < all.length-1 ? all[idx+1] : null;
+
+  const spec = [
+    ['Автор', a.artist],
+    ['Год', a.year],
+    ['Техника', a.techniqueNames?.join(', ')],
+    ['Материал', a.materials || a.printMaterial],
+    a.category === 'engraving' ? ['Размер листа', `${a.sheetHeight}×${a.sheetWidth} см`] : null,
+    a.category === 'engraving' ? ['Размер изображения', `${a.imageHeight}×${a.imageWidth} см`] : null,
+    a.category !== 'engraving' ? ['Размер', `${a.height}×${a.width} см`] : null,
+    a.category === 'engraving' ? ['Тираж', a.edition] : null,
+    a.category === 'engraving' ? ['Номер экземпляра', a.copyNumber] : null,
+    a.category === 'engraving' ? ['Подпись', a.signed] : null,
+    a.category === 'reproduction' ? ['Оригинал', a.originalTitle] : null,
+    a.category === 'reproduction' ? ['Тип репродукции', a.reproductionType] : null,
+  ].filter(([,v]) => v);
+
+  return (
+    <div className="fade-in">
+      <div className="max-w-[1400px] mx-auto px-6 lg:px-10 py-10">
+        <div className="flex items-center justify-between mb-8">
+          <button onClick={() => navigate(-1)} className="text-sm text-muted inline-flex items-center gap-2 hover:text-ink">
+            <Icon.ArrowLeft className="w-4 h-4"/> Назад
+          </button>
+          <div className="text-xs text-muted uppercase tracking-widest">
+            {a.category === 'original' ? 'Оригинал' : a.category === 'engraving' ? 'Гравюра' : 'Репродукция'}
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-[1400px] mx-auto px-6 lg:px-10 grid lg:grid-cols-12 gap-12">
+        <div className="lg:col-span-8">
+          <div className="artwork-frame bg-neutral-100 cursor-zoom-in" onClick={() => setLightbox(true)}>
+            <LazyImage src={cover.url} alt={cover.alt || a.title} ratio={a.height && a.width ? `${a.width}/${a.height}` : '4/5'} />
+          </div>
+          {a.images.length > 1 && (
+            <div className="mt-4 grid grid-cols-5 gap-3">
+              {a.images.map((img, i) => (
+                <button key={i} onClick={() => setActiveIdx(i)}
+                  className={`overflow-hidden border-2 transition ${i===activeIdx?'border-ink':'border-transparent opacity-70 hover:opacity-100'}`}>
+                  <LazyImage src={img.url} alt={img.alt} ratio="1/1" />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="lg:col-span-4">
+          <div className="lg:sticky lg:top-28">
+            <div className="text-[11px] uppercase tracking-[0.3em] text-muted">{a.artist}</div>
+            <h1 className="font-display text-4xl md:text-5xl mt-3 leading-[1.05]">{a.title}</h1>
+            <div className="mt-4 flex items-center gap-4">
+              <StatusBadge status={a.status} />
+              {a.status === 'available' && a.price && <div className="text-lg">{a.price} {a.currency}</div>}
+            </div>
+            <p className="mt-8 text-muted leading-relaxed">{a.description}</p>
+
+            <dl className="mt-10 divide-y hairline border-t hairline">
+              {spec.map(([k,v], i) => (
+                <div key={i} className="py-3 grid grid-cols-3 gap-4 text-sm">
+                  <dt className="text-muted">{k}</dt>
+                  <dd className="col-span-2">{v}</dd>
+                </div>
+              ))}
+            </dl>
+
+            {a.category === 'reproduction' && a.availableSizes?.length > 0 && (
+              <div className="mt-8 border-t hairline pt-6">
+                <div className="text-[11px] uppercase tracking-[0.3em] text-muted mb-4">Доступные размеры</div>
+                <div className="space-y-3">
+                  {a.availableSizes.map((s, i) => (
+                    <div key={i} className="flex items-center justify-between border hairline rounded-xl px-4 py-3">
+                      <div className="text-sm">{s.label}</div>
+                      <div className="text-sm">{s.price} {a.currency}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {a.status === 'available' && (
+              <button onClick={() => navigate('/contacts')} className="mt-8 w-full bg-ink text-paper py-4 rounded-full hover:bg-accent transition">
+                Запросить работу
+              </button>
+            )}
+
+            {(prev || next) && (
+              <div className="mt-12 pt-8 border-t hairline grid grid-cols-2 gap-6">
+                {prev ? (
+                  <button onClick={() => navigate(`/artworks/${prev.slug}`)} className="text-left group">
+                    <div className="text-[10px] uppercase tracking-widest text-muted mb-2">← Предыдущая</div>
+                    <div className="font-display text-lg group-hover:text-accent transition">{prev.title}</div>
+                  </button>
+                ) : <div />}
+                {next ? (
+                  <button onClick={() => navigate(`/artworks/${next.slug}`)} className="text-right group">
+                    <div className="text-[10px] uppercase tracking-widest text-muted mb-2">Следующая →</div>
+                    <div className="font-display text-lg group-hover:text-accent transition">{next.title}</div>
+                  </button>
+                ) : <div />}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {lightbox && (
+        <div className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-6" onClick={() => setLightbox(false)}>
+          <button className="absolute top-6 right-6 text-white p-2" onClick={() => setLightbox(false)}>
+            <Icon.Close className="w-8 h-8"/>
+          </button>
+          <img src={cover.url} alt={cover.alt} className="max-w-full max-h-full object-contain" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============== КОНТАКТЫ ============== */
+function ContactsPage() {
+  const { contacts } = useStore();
+  const [form, setForm] = useState({ name:'', email:'', message:'' });
+  const [sent, setSent] = useState(false);
+  const [errors, setErrors] = useState({});
+
+  const submit = (e) => {
+    e.preventDefault();
+    const errs = {};
+    if (!form.name.trim()) errs.name = 'Укажите имя';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = 'Некорректный e-mail';
+    if (form.message.trim().length < 5) errs.message = 'Сообщение слишком короткое';
+    setErrors(errs);
+    if (Object.keys(errs).length === 0) {
+      setSent(true);
+      setForm({ name:'', email:'', message:'' });
+    }
+  };
+
+  return (
+    <div className="max-w-[1400px] mx-auto px-6 lg:px-10 py-16">
+      <SectionTitle eyebrow="Контакты" title="Напишите нам" subtitle="Отвечаю в течение 1–2 рабочих дней." />
+      <div className="grid lg:grid-cols-12 gap-16">
+        <div className="lg:col-span-5 space-y-8">
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.3em] text-muted mb-2">E-mail</div>
+            <a href={`mailto:${contacts.email||''}`} className="font-display text-2xl hover:text-accent transition">{contacts.email}</a>
+          </div>
+          {contacts.instagram && (
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.3em] text-muted mb-2">Instagram</div>
+              <a href={contacts.instagramUrl} className="font-display text-2xl hover:text-accent transition">{contacts.instagram}</a>
+            </div>
+          )}
+          {contacts.telegram && (
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.3em] text-muted mb-2">Telegram</div>
+              <div className="font-display text-2xl">{contacts.telegram}</div>
+            </div>
+          )}
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.3em] text-muted mb-2">Студия</div>
+            <div className="font-display text-2xl">{contacts.city}</div>
+          </div>
+        </div>
+
+        <div className="lg:col-span-7">
+          {sent ? (
+            <div className="border hairline rounded-2xl p-10 text-center bg-white/50">
+              <div className="w-12 h-12 mx-auto rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mb-5">
+                <Icon.Check className="w-6 h-6"/>
+              </div>
+              <div className="font-display text-3xl">Спасибо!</div>
+              <p className="text-muted mt-3">Сообщение отправлено.</p>
+              <button onClick={() => setSent(false)} className="mt-6 text-sm text-accent hover:underline">Отправить ещё</button>
+            </div>
+          ) : (
+            <form onSubmit={submit} className="space-y-6" noValidate>
+              <Field label="Имя" value={form.name} onChange={v => setForm({...form, name:v})} error={errors.name} />
+              <Field label="E-mail" type="email" value={form.email} onChange={v => setForm({...form, email:v})} error={errors.email} />
+              <Field label="Сообщение" textarea value={form.message} onChange={v => setForm({...form, message:v})} error={errors.message} />
+              <button type="submit" className="inline-flex items-center gap-3 bg-ink text-paper px-8 py-4 rounded-full hover:bg-accent transition">
+                Отправить <Icon.Arrow className="w-4 h-4"/>
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, value, onChange, error, textarea, type='text' }) {
+  const cls = `w-full bg-transparent border-b ${error?'border-red-400':'border-[rgba(26,26,26,.25)]'} focus:border-ink outline-none py-3 transition`;
+  return (
+    <label className="block">
+      <span className="text-[11px] uppercase tracking-[0.3em] text-muted">{label}</span>
+      <div className="mt-2">
+        {textarea
+          ? <textarea rows="5" className={cls} value={value} onChange={e => onChange(e.target.value)} />
+          : <input type={type} className={cls} value={value} onChange={e => onChange(e.target.value)} />}
+      </div>
+      {error && <span className="text-xs text-red-600 mt-1 block">{error}</span>}
+    </label>
+  );
+}
+
+/* ============== АДМИНКА ============== */
+function AdminPage() {
+  const [authed, setAuthed] = useState(() => !!API.token());
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    if (API.token()) {
+      API.me()
+        .then(() => { if (alive) setAuthed(true); })
+        .catch(() => { API.setToken(null); if (alive) setAuthed(false); })
+        .finally(() => { if (alive) setChecking(false); });
+    } else setChecking(false);
+    return () => { alive = false; };
+  }, []);
+
+  if (checking) return <div className="py-32 text-center text-muted">Проверка доступа…</div>;
+  if (!authed) return <AdminLogin onLogin={() => setAuthed(true)} />;
+  return <AdminPanel onLogout={() => { API.setToken(null); setAuthed(false); }} />;
+}
+
+function AdminLogin({ onLogin }) {
+  const [email, setEmail] = useState('admin@studio.art');
+  const [password, setPassword] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true); setErr('');
+    try {
+      const { token } = await API.login(email, password);
+      API.setToken(token);
+      onLogin();
+    } catch (e) { setErr(e.message || 'Не удалось войти'); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="min-h-[70vh] flex items-center justify-center px-6">
+      <form onSubmit={submit} className="w-full max-w-md border hairline rounded-2xl p-10 bg-white/60">
+        <div className="w-12 h-12 rounded-full bg-ink text-paper flex items-center justify-center mb-6">
+          <Icon.Lock className="w-5 h-5"/>
+        </div>
+        <h1 className="font-display text-3xl">Админ-панель</h1>
+        <p className="text-sm text-muted mt-2">Вход по e-mail и паролю.</p>
+        <div className="mt-8 space-y-6">
+          <Field label="E-mail" type="email" value={email} onChange={setEmail} />
+          <Field label="Пароль" type="password" value={password} onChange={setPassword} error={err} />
+        </div>
+        <button disabled={busy} className="mt-8 w-full bg-ink text-paper py-3.5 rounded-full hover:bg-accent transition disabled:opacity-50">
+          {busy ? 'Вход…' : 'Войти'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function AdminPanel({ onLogout }) {
+  const [tab, setTab] = useState('artworks');
+  const tabs = [
+    { id:'artworks', label:'Произведения' },
+    { id:'techniques', label:'Техники' },
+    { id:'about', label:'О нас' },
+    { id:'contacts', label:'Контакты' },
+  ];
+  return (
+    <div className="max-w-[1400px] mx-auto px-6 lg:px-10 py-12">
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <div className="text-[11px] uppercase tracking-[0.3em] text-muted">Admin</div>
+          <h1 className="font-display text-4xl mt-1">Панель управления</h1>
+        </div>
+        <button onClick={onLogout} className="text-sm text-muted hover:text-ink">Выйти</button>
+      </div>
+
+      <div className="mt-8 border-b hairline flex gap-6 overflow-x-auto">
+        {tabs.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            className={`pb-3 text-sm whitespace-nowrap border-b-2 -mb-px transition ${tab===t.id ? 'border-ink text-ink' : 'border-transparent text-muted hover:text-ink'}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-8">
+        {tab === 'artworks' && <AdminArtworks />}
+        {tab === 'techniques' && <AdminTechniques />}
+        {tab === 'about' && <AdminAbout />}
+        {tab === 'contacts' && <AdminContacts />}
+      </div>
+    </div>
+  );
+}
+
+function AdminArtworks() {
+  const store = useStore();
+  const [editing, setEditing] = useState(null);
+  const [creating, setCreating] = useState(false);
+  const list = store.artworks;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div className="text-sm text-muted">{list.length} работ</div>
+        <button onClick={() => setCreating(true)} className="bg-ink text-paper px-5 py-2.5 rounded-full text-sm hover:bg-accent transition">+ Добавить произведение</button>
+      </div>
+
+      <div className="border hairline rounded-2xl overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-white/60 text-left">
+            <tr>
+              <th className="p-3 w-16"></th>
+              <th className="p-3">Название</th>
+              <th className="p-3 hidden md:table-cell">Категория</th>
+              <th className="p-3 hidden md:table-cell">Год</th>
+              <th className="p-3 hidden lg:table-cell">Статус</th>
+              <th className="p-3 hidden lg:table-cell">Цена</th>
+              <th className="p-3 text-right">Действия</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map(a => (
+              <tr key={a.id} className="border-t hairline hover:bg-white/40">
+                <td className="p-3">
+                  <div className="w-12 h-12 rounded overflow-hidden bg-neutral-100">
+                    {a.images?.[0]?.url && <img src={a.images[0].url} alt="" className="w-full h-full object-cover"/>}
+                  </div>
+                </td>
+                <td className="p-3">
+                  <div className="font-medium">{a.title}</div>
+                  <div className="text-xs text-muted">{a.slug}</div>
+                </td>
+                <td className="p-3 hidden md:table-cell">{a.category}</td>
+                <td className="p-3 hidden md:table-cell">{a.year}</td>
+                <td className="p-3 hidden lg:table-cell"><StatusBadge status={a.status} /></td>
+                <td className="p-3 hidden lg:table-cell">{a.price ? `${a.price} ${a.currency}` : '—'}</td>
+                <td className="p-3 text-right whitespace-nowrap">
+                  <button onClick={() => setEditing(a)} className="text-accent hover:underline mr-3">Изменить</button>
+                  <button onClick={async () => { if (confirm(`Удалить «${a.title}»?`)) await store.deleteArtwork(a.id); }}
+                    className="text-red-600 hover:underline">Удалить</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {(editing || creating) && (
+        <ArtworkForm
+          initial={editing}
+          onClose={() => { setEditing(null); setCreating(false); }}
+          onSave={async (data) => {
+            if (editing) await store.updateArtwork(editing.id, data);
+            else await store.createArtwork(data);
+            setEditing(null); setCreating(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function ArtworkForm({ initial, onClose, onSave }) {
+  const store = useStore();
+  const empty = {
+    slug:'', artist:'Анна Морозова', title:'', year: new Date().getFullYear(),
+    category:'original', techniques:[], materials:'', height:0, width:0,
+    description:'', status:'available', price:null, currency:'EUR',
+    images:[{ url:'', alt:'' }], featured:false,
+    sheetHeight:0, sheetWidth:0, imageHeight:0, imageWidth:0,
+    edition:null, copyNumber:'', signed:'',
+  };
+  const [form, setForm] = useState(initial ? { ...empty, ...initial } : empty);
+  const [busy, setBusy] = useState(false);
+  const set = (k,v) => setForm(f => ({ ...f, [k]:v }));
+
+  const toggleTech = (slug) => setForm(f => ({
+    ...f,
+    techniques: f.techniques.includes(slug) ? f.techniques.filter(x => x!==slug) : [...f.techniques, slug]
+  }));
+
+  const addImage = () => setForm(f => ({ ...f, images: [...f.images, { url:'', alt:'' }] }));
+  const updateImage = (i, k, v) => setForm(f => ({ ...f, images: f.images.map((img, idx) => idx===i ? { ...img, [k]:v } : img) }));
+  const removeImage = (i) => setForm(f => ({ ...f, images: f.images.filter((_, idx) => idx !== i) }));
+  const moveImage = (i, dir) => setForm(f => {
+    const arr = [...f.images]; const j = i + dir;
+    if (j < 0 || j >= arr.length) return f;
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+    return { ...f, images: arr };
+  });
+
+  const uploadFile = async (i, file) => {
+    try {
+      const r = await API.upload(file);
+      updateImage(i, 'url', r.url);
+      if (!form.images[i].alt) updateImage(i, 'alt', file.name.replace(/\.[^.]+$/, ''));
+    } catch (e) { alert('Ошибка загрузки: ' + e.message); }
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!form.title.trim()) { alert('Заполните название'); return; }
+    setBusy(true);
+    try { await onSave(form); }
+    catch (e) { alert('Ошибка сохранения: ' + e.message); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
+      <form onSubmit={submit} onClick={e => e.stopPropagation()} className="bg-paper w-full max-w-3xl rounded-2xl mt-10 mb-10 shadow-2xl">
+        <div className="p-6 border-b hairline flex items-center justify-between sticky top-0 bg-paper rounded-t-2xl z-10">
+          <h2 className="font-display text-2xl">{initial ? 'Редактирование' : 'Новая работа'}</h2>
+          <button type="button" onClick={onClose}><Icon.Close className="w-6 h-6"/></button>
+        </div>
+
+        <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+          <div className="grid md:grid-cols-2 gap-6">
+            <Field label="Название" value={form.title} onChange={v => set('title', v)} />
+            <Field label="Slug (URL, опц.)" value={form.slug} onChange={v => set('slug', v)} />
+            <Field label="Автор" value={form.artist} onChange={v => set('artist', v)} />
+            <Field label="Год" type="number" value={form.year} onChange={v => set('year', Number(v))} />
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-6">
+            <label className="block">
+              <span className="text-[11px] uppercase tracking-[0.3em] text-muted">Категория</span>
+              <select className="mt-2 w-full bg-transparent border-b hairline py-3 outline-none" value={form.category} onChange={e => set('category', e.target.value)}>
+                <option value="original">Оригинал</option>
+                <option value="engraving">Гравюра</option>
+                <option value="reproduction">Репродукция</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-[11px] uppercase tracking-[0.3em] text-muted">Статус</span>
+              <select className="mt-2 w-full bg-transparent border-b hairline py-3 outline-none" value={form.status} onChange={e => set('status', e.target.value)}>
+                <option value="available">Доступно</option>
+                <option value="sold">Продано</option>
+                <option value="not_for_sale">Не продаётся</option>
+              </select>
+            </label>
+          </div>
+
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.3em] text-muted mb-3">Техники</div>
+            <div className="flex flex-wrap gap-2">
+              {store.techniques.map(t => (
+                <button type="button" key={t.slug} onClick={() => toggleTech(t.slug)}
+                  className={`px-4 py-2 rounded-full border text-sm transition ${form.techniques.includes(t.slug)?'bg-ink text-paper border-ink':'border-[rgba(26,26,26,.15)] hover:border-ink'}`}>
+                  {t.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-6">
+            <Field label="Материал / основа" value={form.materials||''} onChange={v => set('materials', v)} />
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Высота, см" type="number" value={form.height||0} onChange={v => set('height', Number(v))} />
+              <Field label="Ширина, см" type="number" value={form.width||0} onChange={v => set('width', Number(v))} />
+            </div>
+          </div>
+
+          {form.category === 'engraving' && (
+            <div className="border hairline rounded-xl p-5 space-y-4">
+              <div className="text-[11px] uppercase tracking-[0.3em] text-muted">Параметры гравюры</div>
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <Field label="Л. высота" type="number" value={form.sheetHeight||0} onChange={v => set('sheetHeight', Number(v))} />
+                  <Field label="Л. ширина" type="number" value={form.sheetWidth||0} onChange={v => set('sheetWidth', Number(v))} />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <Field label="Из. высота" type="number" value={form.imageHeight||0} onChange={v => set('imageHeight', Number(v))} />
+                  <Field label="Из. ширина" type="number" value={form.imageWidth||0} onChange={v => set('imageWidth', Number(v))} />
+                </div>
+                <Field label="Тираж" type="number" value={form.edition ?? ''} onChange={v => set('edition', Number(v)||null)} />
+                <Field label="Номер экз." value={form.copyNumber||''} onChange={v => set('copyNumber', v)} />
+                <div className="md:col-span-2">
+                  <Field label="Подпись" value={form.signed||''} onChange={v => set('signed', v)} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          <Field label="Описание" textarea value={form.description||''} onChange={v => set('description', v)} />
+
+          <div className="grid md:grid-cols-3 gap-6">
+            <Field label="Цена (пусто = скрыть)" type="number" value={form.price ?? ''} onChange={v => set('price', v === '' ? null : Number(v))} />
+            <Field label="Валюта" value={form.currency} onChange={v => set('currency', v)} />
+            <label className="flex items-center gap-3 pt-6">
+              <input type="checkbox" checked={form.featured} onChange={e => set('featured', e.target.checked)} />
+              <span className="text-sm">На главной</span>
+            </label>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-[11px] uppercase tracking-[0.3em] text-muted">Изображения (первое — главное)</div>
+              <button type="button" onClick={addImage} className="text-sm text-accent hover:underline">+ Добавить</button>
+            </div>
+            <div className="space-y-3">
+              {form.images.map((img, i) => (
+                <div key={i} className="border hairline rounded-xl p-3 grid grid-cols-12 gap-3 items-start">
+                  <div className="col-span-2">
+                    <div className="aspect-square bg-neutral-100 rounded overflow-hidden">
+                      {img.url && <img src={img.url} alt="" className="w-full h-full object-cover"/>}
+                    </div>
+                    <div className="text-[10px] text-center mt-1 text-muted">{i===0?'главное':`№${i+1}`}</div>
+                  </div>
+                  <div className="col-span-8 space-y-2">
+                    <div className="flex gap-2 items-center">
+                      <input placeholder="URL изображения" value={img.url} onChange={e => updateImage(i,'url',e.target.value)}
+                        className="flex-1 bg-transparent border-b hairline py-2 text-sm outline-none"/>
+                      <label className="text-xs cursor-pointer px-3 py-1.5 rounded-full border hairline hover:border-ink whitespace-nowrap">
+                        Загрузить
+                        <input type="file" accept="image/*" className="hidden"
+                          onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(i, f); }}/>
+                      </label>
+                    </div>
+                    <input placeholder="Alt-текст" value={img.alt} onChange={e => updateImage(i,'alt',e.target.value)}
+                      className="w-full bg-transparent border-b hairline py-2 text-sm outline-none"/>
+                  </div>
+                  <div className="col-span-2 flex flex-col gap-1 text-xs">
+                    <button type="button" onClick={() => moveImage(i,-1)} className="border hairline rounded px-2 py-1 hover:bg-white">↑</button>
+                    <button type="button" onClick={() => moveImage(i,1)} className="border hairline rounded px-2 py-1 hover:bg-white">↓</button>
+                    {form.images.length > 1 && (
+                      <button type="button" onClick={() => removeImage(i)} className="border border-red-200 text-red-600 rounded px-2 py-1 hover:bg-red-50">✕</button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 border-t hairline flex justify-end gap-3 bg-paper rounded-b-2xl">
+          <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-full border hairline hover:border-ink/50">Отмена</button>
+          <button disabled={busy} className="bg-ink text-paper px-5 py-2.5 rounded-full hover:bg-accent transition disabled:opacity-50">
+            {busy ? 'Сохранение…' : 'Сохранить'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function AdminTechniques() {
+  const store = useStore();
+  const [name, setName] = useState('');
+  const [slug, setSlug] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <div className="grid md:grid-cols-2 gap-10">
+      <div>
+        <h3 className="font-display text-2xl mb-4">Существующие техники</h3>
+        <div className="border hairline rounded-2xl divide-y hairline">
+          {store.techniques.map(t => (
+            <div key={t.id} className="flex items-center justify-between p-4">
+              <div>
+                <div>{t.name}</div>
+                <div className="text-xs text-muted">{t.slug}</div>
+              </div>
+              <button onClick={async () => { if (confirm(`Удалить «${t.name}»?`)) await store.deleteTechnique(t.id); }}
+                className="text-red-600 hover:underline text-sm">Удалить</button>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div>
+        <h3 className="font-display text-2xl mb-4">Добавить технику</h3>
+        <div className="space-y-5">
+          <Field label="Название" value={name} onChange={setName} />
+          <Field label="Slug (латиницей)" value={slug} onChange={setSlug} />
+          <button disabled={busy} onClick={async () => {
+            if (!name.trim() || !slug.trim()) return;
+            setBusy(true);
+            try { await store.createTechnique({ name, slug }); setName(''); setSlug(''); }
+            catch (e) { alert('Ошибка: ' + e.message); }
+            finally { setBusy(false); }
+          }} className="bg-ink text-paper px-6 py-3 rounded-full hover:bg-accent transition disabled:opacity-50">Добавить</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminAbout() {
+  const store = useStore();
+  const [form, setForm] = useState(store.about);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { setForm(store.about); }, [store.about]);
+  const set = (k,v) => setForm(f => ({ ...f, [k]:v }));
+
+  const uploadPhoto = async (file) => {
+    try { const r = await API.upload(file); set('photo', r.url); }
+    catch (e) { alert('Ошибка: ' + e.message); }
+  };
+
+  return (
+    <div className="max-w-3xl space-y-6">
+      <Field label="Имя" value={form.name||''} onChange={v => set('name', v)} />
+      <div className="flex items-end gap-3">
+        <div className="flex-1"><Field label="URL фотографии" value={form.photo||''} onChange={v => set('photo', v)} /></div>
+        <label className="text-xs cursor-pointer px-3 py-2 mb-1 rounded-full border hairline hover:border-ink whitespace-nowrap">
+          Загрузить
+          <input type="file" accept="image/*" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) uploadPhoto(f); }}/>
+        </label>
+      </div>
+      <Field label="Краткая биография" textarea value={form.shortBio||''} onChange={v => set('shortBio', v)} />
+      <Field label="Образование" textarea value={form.education||''} onChange={v => set('education', v)} />
+      <Field label="Практика" textarea value={form.practice||''} onChange={v => set('practice', v)} />
+      <Field label="Выставки (по одной на строку)" textarea
+        value={(form.exhibitions||[]).join('\n')}
+        onChange={v => set('exhibitions', v.split('\n').filter(Boolean))} />
+      <button disabled={busy} onClick={async () => {
+        setBusy(true);
+        try { await store.setAbout(form); alert('Сохранено'); }
+        catch (e) { alert('Ошибка: ' + e.message); }
+        finally { setBusy(false); }
+      }} className="bg-ink text-paper px-6 py-3 rounded-full hover:bg-accent transition disabled:opacity-50">Сохранить</button>
+    </div>
+  );
+}
+
+function AdminContacts() {
+  const store = useStore();
+  const [form, setForm] = useState(store.contacts);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { setForm(store.contacts); }, [store.contacts]);
+  const set = (k,v) => setForm(f => ({ ...f, [k]:v }));
+
+  return (
+    <div className="max-w-2xl space-y-6">
+      <Field label="E-mail" value={form.email||''} onChange={v => set('email', v)} />
+      <Field label="Instagram (текст)" value={form.instagram||''} onChange={v => set('instagram', v)} />
+      <Field label="Instagram (ссылка)" value={form.instagramUrl||''} onChange={v => set('instagramUrl', v)} />
+      <Field label="Telegram" value={form.telegram||''} onChange={v => set('telegram', v)} />
+      <Field label="Город" value={form.city||''} onChange={v => set('city', v)} />
+      <button disabled={busy} onClick={async () => {
+        setBusy(true);
+        try { await store.setContacts(form); alert('Сохранено'); }
+        catch (e) { alert('Ошибка: ' + e.message); }
+        finally { setBusy(false); }
+      }} className="bg-ink text-paper px-6 py-3 rounded-full hover:bg-accent transition disabled:opacity-50">Сохранить</button>
+    </div>
+  );
+}
+
+/* ============== Роуты ============== */
+function Routes() {
+  const route = useRoute();
+  const path = route.split('?')[0];
+  const parts = path.split('/').filter(Boolean);
+
+  if (path === '/' || parts.length === 0) return <HomePage />;
+  if (parts[0] === 'about') return <AboutPage />;
+  if (parts[0] === 'techniques') {
+    if (parts[1]) return <TechniqueDetailPage slug={parts[1]} />;
+    return <TechniquesPage />;
+  }
+  if (parts[0] === 'originals') return <CategoryPage category="original" title="Оригиналы" subtitle="Уникальные работы в единственном экземпляре." />;
+  if (parts[0] === 'engravings') return <CategoryPage category="engraving" title="Гравюры" subtitle="Тиражные листы: линогравюра, ксилография, офорт." />;
+  if (parts[0] === 'reproductions') return <CategoryPage category="reproduction" title="Репродукции" subtitle="Печатные копии в нескольких размерах." />;
+  if (parts[0] === 'series') return <SeriesPage />;
+  if (parts[0] === 'artworks' && parts[1]) return <ArtworkPage slug={parts[1]} />;
+  if (parts[0] === 'contacts') return <ContactsPage />;
+  if (parts[0] === 'admin') return <AdminPage />;
+
+  return <div className="py-32 text-center">
+    <h1 className="font-display text-5xl">404</h1>
+    <button onClick={() => navigate('/')} className="mt-6 text-accent hover:underline">На главную</button>
+  </div>;
+}
+
+function AppShell() {
+  const { loading, error } = useStore();
+  if (loading) return <div className="min-h-[60vh] flex items-center justify-center text-muted">Загрузка…</div>;
+  if (error) return <div className="min-h-[60vh] flex items-center justify-center text-red-600">Ошибка: {error}</div>;
+  return <Routes />;
+}
+
+function App() {
+  useEffect(() => {
+    const route = window.location.hash.replace(/^#/, '') || '/';
+    const titles = {
+      '/': 'Atelier — портфолио художника',
+      '/about': 'О нас — Anna Morozova',
+      '/techniques': 'По техникам — Anna Morozova',
+      '/originals': 'Оригиналы — Anna Morozova',
+      '/engravings': 'Гравюры — Anna Morozova',
+      '/reproductions': 'Репродукции — Anna Morozova',
+      '/series': 'Серии — Anna Morozova',
+      '/contacts': 'Контакты — Anna Morozova',
+      '/admin': 'Админ-панель',
+    };
+    document.title = titles[route] || 'Anna Morozova — Portfolio';
+  });
+
+  return (
+    <StoreProvider>
+      <div className="min-h-screen flex flex-col">
+        <Header />
+        <main className="flex-1"><AppShell /></main>
+        <Footer />
+      </div>
+    </StoreProvider>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

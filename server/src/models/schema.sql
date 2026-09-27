@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS artworks (
   height          REAL,
   width           REAL,
   description     TEXT,
+  series          TEXT,
   status          TEXT NOT NULL DEFAULT 'available'
                     CHECK (status IN ('available','sold','not_for_sale')),
   price           REAL,

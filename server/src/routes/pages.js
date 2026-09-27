@@ -6,14 +6,13 @@ import { requireAuth } from '../middleware/auth.js';
 const router = Router();
 
 const aboutSchema = z.object({
-  name: z.string(),
-  photo: z.string(),
-  shortBio: z.string(),
-  education: z.string(),
-  practice: z.string(),
-  exhibitions: z.array(z.string()).default([]),
+  artists: z.array(z.object({
+    name: z.string(),
+    photo: z.string(),
+    shortBio: z.string(),
+    education: z.string(),
+  })).min(1).max(10),
 });
-
 const contactsSchema = z.object({
   email: z.string().email(),
   instagram: z.string(),

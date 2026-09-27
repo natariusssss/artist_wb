@@ -49,6 +49,7 @@ function mapRow(row) {
     originalTitle: row.original_title,
     reproductionType: row.repro_type,
     printMaterial: row.print_material,
+    series: row.series,
     availableSizes: sizes,
 
     images,
@@ -132,6 +133,7 @@ const artworkSchema = z.object({
   originalTitle: z.string().nullable().optional(),
   reproductionType: z.string().nullable().optional(),
   printMaterial: z.string().nullable().optional(),
+  series: z.string().nullable().optional(),
   availableSizes: z.array(z.object({ label: z.string(), price: z.number().nullable().optional() })).optional(),
 
   images: z.array(z.object({ url: z.string(), alt: z.string().optional() })).default([]),
@@ -165,22 +167,23 @@ router.post('/', requireAuth, (req, res) => {
 
   const tx = db.transaction(() => {
     const info = db.prepare(`
-      INSERT INTO artworks (
-        slug, artist, title, year, category, materials, height, width, description,
-        status, price, currency, featured,
-        sheet_height, sheet_width, image_height, image_width, edition, copy_number, signed,
-        original_title, repro_type, print_material,
-        meta_title, meta_description
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-    `).run(
-      slug, data.artist, data.title, data.year ?? null, data.category,
-      data.materials ?? null, data.height ?? null, data.width ?? null, data.description ?? null,
-      data.status, data.price ?? null, data.currency, data.featured ? 1 : 0,
-      data.sheetHeight ?? null, data.sheetWidth ?? null, data.imageHeight ?? null, data.imageWidth ?? null,
-      data.edition ?? null, data.copyNumber ?? null, data.signed ?? null,
-      data.originalTitle ?? null, data.reproductionType ?? null, data.printMaterial ?? null,
-      data.metaTitle ?? null, data.metaDescription ?? null
-    );
+  INSERT INTO artworks (
+    slug, artist, title, year, category, materials, height, width, description,
+    status, price, currency, featured,
+    sheet_height, sheet_width, image_height, image_width, edition, copy_number, signed,
+    original_title, repro_type, print_material, series,
+    meta_title, meta_description
+  ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+`).run(
+  slug, data.artist, data.title, data.year ?? null, data.category,
+  data.materials ?? null, data.height ?? null, data.width ?? null, data.description ?? null,
+  data.status, data.price ?? null, data.currency, data.featured ? 1 : 0,
+  data.sheetHeight ?? null, data.sheetWidth ?? null, data.imageHeight ?? null, data.imageWidth ?? null,
+  data.edition ?? null, data.copyNumber ?? null, data.signed ?? null,
+  data.originalTitle ?? null, data.reproductionType ?? null, data.printMaterial ?? null,
+  data.series ?? null,
+  data.metaTitle ?? null, data.metaDescription ?? null
+);
     const id = info.lastInsertRowid;
     persistRelations(id, data);
     return id;
@@ -222,6 +225,7 @@ router.put('/:id', requireAuth, (req, res) => {
       data.sheetHeight ?? null, data.sheetWidth ?? null, data.imageHeight ?? null, data.imageWidth ?? null,
       data.edition ?? null, data.copyNumber ?? null, data.signed ?? null,
       data.originalTitle ?? null, data.reproductionType ?? null, data.printMaterial ?? null,
+      data.series ?? null,
       data.metaTitle ?? null, data.metaDescription ?? null,
       existing.id
     );

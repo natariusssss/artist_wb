@@ -21,22 +21,27 @@ const insTech = db.prepare('INSERT OR IGNORE INTO techniques (slug, name) VALUES
 techs.forEach(([slug, name]) => insTech.run(slug, name));
 
 const about = {
-  name: 'Анна Морозова',
-  photo: 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?auto=format&fit=crop&w=900&q=80',
-  shortBio: 'Художник-график. Работаю с пастелью, акварелью и печатной графикой.',
-  education: 'МГАХИ им. В. И. Сурикова, факультет графики. Стажировка в École des Beaux-Arts, Париж.',
-  practice: 'В своей практике исследую свет и воздух через бумагу. Работаю сериями.',
-  exhibitions: [
-    '2024 — «Тихие поверхности», Galerie Lumen, Париж',
-    '2023 — «Бумага и свет», ЦТИ «Фабрика», Москва',
-  ]
+  artists: [
+    {
+      name: "София Парфенова\n        Sofia Parfenova",
+      photo: '/uploads/bd52f7cd4ca22997e7c9f7c9.png',
+      shortBio: 'Художница, историк искусства\n Artist, Art Historian',
+      education: 'Академия художеств в Санкт-Петербурге, Докторат в École du Louvre\n St. Petersburg Academy of Fine Arts; PhD candidate at the École du Louvre ',
+    },
+    {
+      name: 'Егор Шишков\n Egor Shishkov',
+      photo: '/uploads/1f5c5287a09f52d2f1055969.png',
+      shortBio: 'Художник- график, Архитектор\n Graphic Artist, Architect',
+      education: 'Диплом архитектора école nationale supérieure d’architecture Paris-Belleville\n Degree in Architecture, École nationale supérieure d’architecture de Paris-Belleville',
+    },
+  ],
 };
 const contacts = {
-  email: 'studio@annamorozova.art',
-  instagram: '@anna.morozova.art',
+  email: 'studio.asnieres.contact@gmail.com',
+  instagram: '@studio_asnieres',
   instagramUrl: 'https://instagram.com/',
-  telegram: '@anna_studio',
-  city: 'Париж / Москва',
+  telegram: '@sonchor',
+  city: 'Париж',
 };
 const insPage = db.prepare(`
   INSERT INTO pages (key, json) VALUES (?, ?)

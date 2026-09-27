@@ -12,6 +12,7 @@ import techniquesRouter from './routes/techniques.js';
 import pagesRouter from './routes/pages.js';
 import uploadsRouter from './routes/uploads.js';
 import { errorHandler } from './middleware/error.js';
+import contactRouter from './routes/contact.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -36,6 +37,7 @@ app.use('/api/artworks', artworksRouter);
 app.use('/api/techniques', techniquesRouter);
 app.use('/api', pagesRouter);
 app.use('/api/uploads', uploadsRouter);
+app.use('/api/contact', contactRouter);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
@@ -52,3 +54,4 @@ app.listen(PORT, () => {
   console.log(`🎨 Server: http://localhost:${PORT}`);
   console.log(`🔐 Логин: ${process.env.ADMIN_EMAIL} / ${process.env.ADMIN_PASSWORD}`);
 });
+

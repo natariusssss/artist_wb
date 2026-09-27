@@ -10,6 +10,9 @@
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone@7.25.6/babel.min.js"></script>
+<script src="https://unpkg.com/react-i18next@15.0.0/dist/umd/react-i18next.min.js"></script>
+<script src="https://unpkg.com/i18next@23.15.1/dist/umd/i18next.min.js"></script>
+
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -266,7 +269,7 @@ function Footer() {
     <footer className="mt-32 border-t hairline">
       <div className="max-w-[1400px] mx-auto px-6 lg:px-10 py-16 grid md:grid-cols-3 gap-10">
         <div>
-          <div className="font-display text-3xl">Anna Morozova</div>
+          <div className="font-display text-3xl">Studio asnieres</div>
           <p className="text-sm text-muted mt-3 max-w-xs">Портфолио и каталог работ.</p>
         </div>
         <div className="text-sm">
@@ -285,7 +288,7 @@ function Footer() {
       </div>
       <div className="border-t hairline">
         <div className="max-w-[1400px] mx-auto px-6 lg:px-10 py-6 text-xs text-muted flex flex-wrap justify-between gap-4">
-          <div>© {new Date().getFullYear()} Anna Morozova.</div>
+          <div>© {new Date().getFullYear()} Studio asnieres.</div>
           <button onClick={() => navigate('/admin')} className="hover:text-ink">Админ-панель</button>
         </div>
       </div>
@@ -379,7 +382,7 @@ function HomePage() {
     <div>
       <section className="max-w-[1400px] mx-auto px-6 lg:px-10 pt-16 pb-20 grid lg:grid-cols-12 gap-10 items-end">
         <div className="lg:col-span-5">
-          <div className="text-[11px] uppercase tracking-[0.3em] text-muted mb-6">Портфолио · 2020—2024</div>
+          <div className="text-[11px] uppercase tracking-[0.3em] text-muted mb-6">Портфолио · </div>
           <h1 className="font-display text-6xl md:text-7xl leading-[0.95]">
             Свет,<br/>бумага,<br/><em className="italic text-accent">повтор</em>.
           </h1>
@@ -462,51 +465,66 @@ function HomePage() {
 /* ============== О НАС ============== */
 function AboutPage() {
   const { about } = useStore();
+  const artists = about.artists || [];
+
+  if (!artists.length) {
+    return (
+      <div className="max-w-[1400px] mx-auto px-6 lg:px-10 py-32 text-center text-muted">
+        Информация о художниках пока не заполнена.
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-[1400px] mx-auto px-6 lg:px-10 py-16">
-      <div className="grid lg:grid-cols-12 gap-12">
-        <div className="lg:col-span-5">
-          <div className="sticky top-28">
-            <div className="artwork-frame overflow-hidden">
-              <LazyImage src={about.photo} alt={`Фотография — ${about.name||''}`} ratio="4/5" />
-            </div>
-            <div className="mt-6 font-display text-3xl">{about.name}</div>
-            <div className="text-muted">Художник-график</div>
-          </div>
-        </div>
-        <div className="lg:col-span-7 fade-in">
-          <div className="text-[11px] uppercase tracking-[0.3em] text-muted">О нас</div>
-          <h1 className="font-display text-5xl md:text-6xl mt-4 leading-[1.02]">{about.name}</h1>
-          <div className="mt-10 space-y-10 text-lg leading-relaxed">
-            <p>{about.shortBio}</p>
-            <div>
-              <div className="text-[11px] uppercase tracking-[0.3em] text-muted mb-3">Образование</div>
-              <p>{about.education}</p>
-            </div>
-            <div>
-              <div className="text-[11px] uppercase tracking-[0.3em] text-muted mb-3">Практика</div>
-              <p>{about.practice}</p>
-            </div>
-            {about.exhibitions?.length > 0 && (
-              <div>
-                <div className="text-[11px] uppercase tracking-[0.3em] text-muted mb-3">Выставки и проекты</div>
-                <ul className="space-y-2">
-                  {about.exhibitions.map((e, i) => (
-                    <li key={i} className="flex gap-4 text-base">
-                      <span className="text-muted tabular-nums">{e.slice(0,4)}</span>
-                      <span>{e.slice(7)}</span>
-                    </li>
-                  ))}
-                </ul>
+      <div className="text-[11px] uppercase tracking-[0.3em] text-muted mb-12">О нас</div>
+
+      <div className="space-y-32">
+        {artists.map((artist, idx) => (
+          <div key={idx} className="grid lg:grid-cols-12 gap-12 items-start">
+            {/* Фото */}
+            <div className={`lg:col-span-5 ${idx % 2 === 1 ? 'lg:order-2' : ''}`}>
+              <div className="sticky top-28">
+                <div className="artwork-frame overflow-hidden">
+                  <LazyImage
+                    src={artist.photo}
+                    alt={`Фотография — ${artist.name || ''}`}
+                    ratio="4/5"
+                  />
+                </div>
               </div>
-            )}
+            </div>
+
+            {/* Текст */}
+            <div className={`lg:col-span-7 fade-in ${idx % 2 === 1 ? 'lg:order-1' : ''}`}>
+              <h1 className="font-display text-5xl md:text-6xl leading-[1.02] whitespace-pre-line">
+                    {artist.name}
+            </h1>
+              <div className="text-muted mt-3 text-lg">Художник-график</div>
+
+              <div className="mt-10 space-y-10 text-lg leading-relaxed">
+                {/* shortBio — с сохранением переносов строк */}
+                {artist.shortBio && (
+                  <p className="whitespace-pre-line">{artist.shortBio}</p>
+                )}
+
+                {/* education — с сохранением переносов строк */}
+                {artist.education && (
+                  <div>
+                    <div className="text-[11px] uppercase tracking-[0.3em] text-muted mb-3">
+                      Образование
+                    </div>
+                    <p className="whitespace-pre-line">{artist.education}</p>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
+        ))}
       </div>
     </div>
   );
 }
-
 /* ============== ТЕХНИКИ ============== */
 function TechniquesPage() {
   const store = useStore();
@@ -573,32 +591,70 @@ function CategoryPage({ category, title, subtitle }) {
 /* ============== СЕРИИ ============== */
 function SeriesPage() {
   const store = useStore();
+
   const groups = useMemo(() => {
     const map = {};
-    store.artworks.forEach(a => { (map[a.year] ||= []).push(a); });
-    return Object.entries(map).sort((a,b) => b[0]-a[0]);
+    store.artworks.forEach(a => {
+      const key = (a.series || '').trim();
+      if (!key) return;
+      (map[key] ||= []).push(a);
+    });
+    // Сортируем серии по алфавиту
+    return Object.entries(map).sort((a, b) => a[0].localeCompare(b[0], 'ru'));
   }, [store.artworks]);
+
+  const withoutSeries = store.artworks.filter(a => !(a.series || '').trim());
 
   return (
     <div className="max-w-[1400px] mx-auto px-6 lg:px-10 py-16">
-      <SectionTitle eyebrow="Каталог" title="Серии" subtitle="Работы, объединённые временем и материалом." />
-      <div className="space-y-20">
-        {groups.map(([year, items]) => (
-          <div key={year}>
+      <SectionTitle
+        eyebrow="Каталог"
+        title="Серии"
+        subtitle="Работы, объединённые художником в авторские серии."
+      />
+
+      {groups.length === 0 && (
+        <div className="text-center py-24">
+          <div className="font-display text-3xl mb-4">Серий пока нет</div>
+          <p className="text-muted max-w-md mx-auto">
+            Чтобы создать серию, откройте работу в админке и заполните поле «Серия».
+            Например: «Портовые этюды».
+          </p>
+        </div>
+      )}
+
+      <div className="space-y-24">
+        {groups.map(([seriesName, items]) => (
+          <div key={seriesName}>
             <div className="flex items-baseline justify-between border-b hairline pb-3 mb-8">
-              <h3 className="font-display text-3xl">Серия {year}</h3>
-              <div className="text-sm text-muted">{items.length} работ</div>
+              <h3 className="font-display text-3xl md:text-4xl">{seriesName}</h3>
+              <div className="text-sm text-muted">
+                {items.length} {items.length === 1 ? 'работа' : items.length < 5 ? 'работы' : 'работ'}
+              </div>
             </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-14">
-              {items.map(a => <ArtworkCard key={a.id} artwork={a} onClick={() => navigate(`/artworks/${a.slug}`)} />)}
+              {items.map(a => (
+                <ArtworkCard
+                  key={a.id}
+                  artwork={a}
+                  onClick={() => navigate(`/artworks/${a.slug}`)}
+                />
+              ))}
             </div>
           </div>
         ))}
       </div>
+
+      {withoutSeries.length > 0 && groups.length > 0 && (
+        <div className="mt-24 pt-12 border-t hairline">
+          <div className="text-sm text-muted">
+            Работы вне серий: <span className="text-ink">{withoutSeries.length}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
 /* ============== КАРТОЧКА ПРОИЗВЕДЕНИЯ ============== */
 function ArtworkPage({ slug }) {
   const store = useStore();
@@ -607,6 +663,63 @@ function ArtworkPage({ slug }) {
   const [lightbox, setLightbox] = useState(false);
   useEffect(() => { setActiveIdx(0); }, [slug]);
 
+  // Динамический title и meta description
+  useEffect(() => {
+    if (!a) return;
+
+    const previousTitle = document.title;
+    const previousDescription =
+      document.querySelector('meta[name="description"]')?.getAttribute('content') || '';
+
+    // Формируем title
+    const title = a.metaTitle
+      ? a.metaTitle
+      : `${a.title}${a.year ? `, ${a.year}` : ''}${
+          a.techniqueNames?.length ? ` — ${a.techniqueNames.join(', ')}` : ''
+        } | ${a.artist || 'Portfolio'}`;
+
+    // Формируем description
+    const description = a.metaDescription
+      ? a.metaDescription
+      : (a.description || `${a.title} — работа ${a.year || ''}`).slice(0, 160);
+
+    document.title = title;
+
+    // meta description
+    let metaDesc = document.querySelector('meta[name="description"]');
+    if (!metaDesc) {
+      metaDesc = document.createElement('meta');
+      metaDesc.setAttribute('name', 'description');
+      document.head.appendChild(metaDesc);
+    }
+    metaDesc.setAttribute('content', description);
+
+    // OpenGraph (для превью в соцсетях)
+    const setOg = (property, content) => {
+      let el = document.querySelector(`meta[property="${property}"]`);
+      if (!el) {
+        el = document.createElement('meta');
+        el.setAttribute('property', property);
+        document.head.appendChild(el);
+      }
+      el.setAttribute('content', content);
+    };
+
+    setOg('og:title', title);
+    setOg('og:description', description);
+    setOg('og:type', 'website');
+    if (a.images?.[0]?.url) {
+      setOg('og:image', a.images[0].url.startsWith('http')
+        ? a.images[0].url
+        : window.location.origin + a.images[0].url);
+    }
+
+    return () => {
+      document.title = previousTitle;
+      metaDesc.setAttribute('content', previousDescription);
+    };
+  }, [a]);
+
   if (!a) return (
     <div className="max-w-3xl mx-auto py-32 text-center">
       <h1 className="font-display text-4xl mb-4">Работа не найдена</h1>
@@ -614,26 +727,27 @@ function ArtworkPage({ slug }) {
     </div>
   );
 
-  const cover = a.images[activeIdx] || a.images[0];
+  const images = Array.isArray(a.images) ? a.images.filter(img => img && img.url) : [];
+  const cover = images[activeIdx] || images[0] || { url: '', alt: a.title };
   const all = store.listArtworks({ category: a.category });
   const idx = all.findIndex(x => x.id === a.id);
   const prev = idx > 0 ? all[idx-1] : null;
   const next = idx >= 0 && idx < all.length-1 ? all[idx+1] : null;
 
-  const spec = [
-    ['Автор', a.artist],
-    ['Год', a.year],
-    ['Техника', a.techniqueNames?.join(', ')],
-    ['Материал', a.materials || a.printMaterial],
-    a.category === 'engraving' ? ['Размер листа', `${a.sheetHeight}×${a.sheetWidth} см`] : null,
-    a.category === 'engraving' ? ['Размер изображения', `${a.imageHeight}×${a.imageWidth} см`] : null,
-    a.category !== 'engraving' ? ['Размер', `${a.height}×${a.width} см`] : null,
-    a.category === 'engraving' ? ['Тираж', a.edition] : null,
-    a.category === 'engraving' ? ['Номер экземпляра', a.copyNumber] : null,
-    a.category === 'engraving' ? ['Подпись', a.signed] : null,
-    a.category === 'reproduction' ? ['Оригинал', a.originalTitle] : null,
-    a.category === 'reproduction' ? ['Тип репродукции', a.reproductionType] : null,
-  ].filter(([,v]) => v);
+const spec = [
+  ['Автор', a.artist],
+  ['Год', a.year],
+  ['Техника', a.techniqueNames?.join(', ')],
+  ['Материал', a.materials || a.printMaterial],
+  a.category === 'engraving' ? ['Размер листа', `${a.sheetHeight}×${a.sheetWidth} см`] : null,
+  a.category === 'engraving' ? ['Размер изображения', `${a.imageHeight}×${a.imageWidth} см`] : null,
+  a.category !== 'engraving' ? ['Размер', `${a.height}×${a.width} см`] : null,
+  a.category === 'engraving' ? ['Тираж', a.edition] : null,
+  a.category === 'engraving' ? ['Номер экземпляра', a.copyNumber] : null,
+  a.category === 'engraving' ? ['Подпись', a.signed] : null,
+  a.category === 'reproduction' ? ['Оригинал', a.originalTitle] : null,
+  a.category === 'reproduction' ? ['Тип репродукции', a.reproductionType] : null,
+].filter(item => item && item[1]);
 
   return (
     <div className="fade-in">
@@ -699,7 +813,10 @@ function ArtworkPage({ slug }) {
             )}
 
             {a.status === 'available' && (
-              <button onClick={() => navigate('/contacts')} className="mt-8 w-full bg-ink text-paper py-4 rounded-full hover:bg-accent transition">
+              <button
+                onClick={() => navigate(`/contacts?artwork=${encodeURIComponent(a.slug)}&title=${encodeURIComponent(a.title)}`)}
+                className="mt-8 w-full bg-ink text-paper py-4 rounded-full hover:bg-accent transition"
+              >
                 Запросить работу
               </button>
             )}
@@ -739,26 +856,105 @@ function ArtworkPage({ slug }) {
 /* ============== КОНТАКТЫ ============== */
 function ContactsPage() {
   const { contacts } = useStore();
-  const [form, setForm] = useState({ name:'', email:'', message:'' });
+  const route = useRoute();
+
+  // Читаем параметры из URL: /contacts?artwork=slug&title=Название
+  const params = useMemo(() => {
+    const q = route.split('?')[1] || '';
+    return new URLSearchParams(q);
+  }, [route]);
+
+  const artworkSlug = params.get('artwork') || '';
+  const artworkTitle = params.get('title') || '';
+
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    message: artworkTitle
+      ? `Здравствуйте! Интересует работа «${artworkTitle}». ` +
+        `Пожалуйста, расскажите об условиях приобретения.`
+      : '',
+    artwork: artworkSlug,          // slug работы уйдёт на сервер
+  });
   const [sent, setSent] = useState(false);
   const [errors, setErrors] = useState({});
+  const [busy, setBusy] = useState(false);
 
-  const submit = (e) => {
+  // Если пользователь открыл /contacts?artwork=... — обновляем поле сообщения
+  useEffect(() => {
+    if (artworkTitle) {
+      setForm(f => ({
+        ...f,
+        artwork: artworkSlug,
+        message: f.message || (
+          `Здравствуйте! Интересует работа «${artworkTitle}». ` +
+          `Пожалуйста, расскажите об условиях приобретения.`
+        ),
+      }));
+    }
+  }, [artworkSlug, artworkTitle]);
+
+  const submit = async (e) => {
     e.preventDefault();
     const errs = {};
     if (!form.name.trim()) errs.name = 'Укажите имя';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = 'Некорректный e-mail';
     if (form.message.trim().length < 5) errs.message = 'Сообщение слишком короткое';
     setErrors(errs);
-    if (Object.keys(errs).length === 0) {
+    if (Object.keys(errs).length) return;
+
+    setBusy(true);
+    try {
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name,
+          email: form.email,
+          message: form.message,
+          artwork: form.artwork || null,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Не удалось отправить');
+      }
       setSent(true);
-      setForm({ name:'', email:'', message:'' });
+      setForm({ name:'', email:'', message:'', artwork: '' });
+    } catch (err) {
+      setErrors({ form: err.message });
+    } finally {
+      setBusy(false);
     }
   };
 
   return (
     <div className="max-w-[1400px] mx-auto px-6 lg:px-10 py-16">
-      <SectionTitle eyebrow="Контакты" title="Напишите нам" subtitle="Отвечаю в течение 1–2 рабочих дней." />
+      <SectionTitle
+        eyebrow="Контакты"
+        title="Напишите нам"
+        subtitle={artworkTitle
+          ? `Запрос по работе «${artworkTitle}».`
+          : 'Отвечаю в течение 1–2 рабочих дней.'}
+      />
+
+      {/* Плашка «вы запрашиваете работу» */}
+      {artworkTitle && !sent && (
+        <div className="mb-8 border hairline rounded-2xl px-5 py-4 bg-white/60 flex items-center gap-4">
+          <div className="w-2 h-2 rounded-full bg-accent"></div>
+          <div className="text-sm">
+            Вы запрашиваете работу: <span className="font-medium">{artworkTitle}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/contacts')}
+            className="ml-auto text-xs text-muted hover:text-ink"
+          >
+            Сбросить
+          </button>
+        </div>
+      )}
+
       <div className="grid lg:grid-cols-12 gap-16">
         <div className="lg:col-span-5 space-y-8">
           <div>
@@ -791,15 +987,22 @@ function ContactsPage() {
               </div>
               <div className="font-display text-3xl">Спасибо!</div>
               <p className="text-muted mt-3">Сообщение отправлено.</p>
-              <button onClick={() => setSent(false)} className="mt-6 text-sm text-accent hover:underline">Отправить ещё</button>
+              <button onClick={() => { setSent(false); navigate('/contacts'); }} className="mt-6 text-sm text-accent hover:underline">
+                Отправить ещё
+              </button>
             </div>
           ) : (
             <form onSubmit={submit} className="space-y-6" noValidate>
               <Field label="Имя" value={form.name} onChange={v => setForm({...form, name:v})} error={errors.name} />
               <Field label="E-mail" type="email" value={form.email} onChange={v => setForm({...form, email:v})} error={errors.email} />
               <Field label="Сообщение" textarea value={form.message} onChange={v => setForm({...form, message:v})} error={errors.message} />
-              <button type="submit" className="inline-flex items-center gap-3 bg-ink text-paper px-8 py-4 rounded-full hover:bg-accent transition">
-                Отправить <Icon.Arrow className="w-4 h-4"/>
+              {errors.form && <div className="text-sm text-red-600">{errors.form}</div>}
+              <button
+                type="submit"
+                disabled={busy}
+                className="inline-flex items-center gap-3 bg-ink text-paper px-8 py-4 rounded-full hover:bg-accent transition disabled:opacity-50"
+              >
+                {busy ? 'Отправка…' : 'Отправить'} <Icon.Arrow className="w-4 h-4"/>
               </button>
             </form>
           )}
@@ -990,13 +1193,15 @@ function AdminArtworks() {
 function ArtworkForm({ initial, onClose, onSave }) {
   const store = useStore();
   const empty = {
-    slug:'', artist:'Анна Морозова', title:'', year: new Date().getFullYear(),
-    category:'original', techniques:[], materials:'', height:0, width:0,
-    description:'', status:'available', price:null, currency:'EUR',
-    images:[{ url:'', alt:'' }], featured:false,
-    sheetHeight:0, sheetWidth:0, imageHeight:0, imageWidth:0,
-    edition:null, copyNumber:'', signed:'',
-  };
+  slug:'', artist:'Анна Морозова', title:'', year: new Date().getFullYear(),
+  category:'original', techniques:[], materials:'', height:0, width:0,
+  description:'', status:'available', price:null, currency:'EUR',
+  images:[{ url:'', alt:'' }], featured:false,
+  sheetHeight:0, sheetWidth:0, imageHeight:0, imageWidth:0,
+  edition:null, copyNumber:'', signed:'',
+  metaTitle:'', metaDescription:'',    // ← добавили
+  series:'',
+};
   const [form, setForm] = useState(initial ? { ...empty, ...initial } : empty);
   const [busy, setBusy] = useState(false);
   const set = (k,v) => setForm(f => ({ ...f, [k]:v }));
@@ -1110,7 +1315,40 @@ function ArtworkForm({ initial, onClose, onSave }) {
           )}
 
           <Field label="Описание" textarea value={form.description||''} onChange={v => set('description', v)} />
+          <div className="border-t hairline pt-6 space-y-4">
+  <div className="text-[11px] uppercase tracking-[0.3em] text-muted">
+    <div className="border-t hairline pt-6">
+  <Field
+    label="Серия (объединяет работы в группу)"
+    value={form.series || ''}
+    onChange={v => set('series', v)}
+  />
+  <div className="text-xs text-muted mt-2">
+    Например: «Портовые этюды», «Зимний цикл». Оставьте пусто, если работа вне серии.
+  </div>
+</div>
+    SEO (Meta)
+  </div>
 
+  <Field
+    label="Meta Title (для поисковиков)"
+    value={form.metaTitle || ''}
+    onChange={v => set('metaTitle', v)}
+  />
+  <div className="text-xs text-muted -mt-3">
+    Если пусто — подставится «Название — Год, Техника».
+  </div>
+
+  <Field
+    label="Meta Description (для превью в соцсетях)"
+    textarea
+    value={form.metaDescription || ''}
+    onChange={v => set('metaDescription', v)}
+  />
+  <div className="text-xs text-muted -mt-3">
+    Если пусто — подставится краткое описание из основного поля «Описание».
+  </div>
+</div>
           <div className="grid md:grid-cols-3 gap-6">
             <Field label="Цена (пусто = скрыть)" type="number" value={form.price ?? ''} onChange={v => set('price', v === '' ? null : Number(v))} />
             <Field label="Валюта" value={form.currency} onChange={v => set('currency', v)} />
@@ -1214,39 +1452,132 @@ function AdminTechniques() {
 
 function AdminAbout() {
   const store = useStore();
-  const [form, setForm] = useState(store.about);
+  const [form, setForm] = useState(store.about || { artists: [] });
   const [busy, setBusy] = useState(false);
-  useEffect(() => { setForm(store.about); }, [store.about]);
-  const set = (k,v) => setForm(f => ({ ...f, [k]:v }));
 
-  const uploadPhoto = async (file) => {
-    try { const r = await API.upload(file); set('photo', r.url); }
+  useEffect(() => { setForm(store.about || { artists: [] }); }, [store.about]);
+
+  const artists = form.artists || [];
+
+  const updateArtist = (i, key, value) => {
+    setForm(f => ({
+      ...f,
+      artists: f.artists.map((a, idx) => idx === i ? { ...a, [key]: value } : a),
+    }));
+  };
+
+  const addArtist = () => {
+    setForm(f => ({
+      ...f,
+      artists: [...(f.artists || []), { name:'', photo:'', shortBio:'', education:'' }],
+    }));
+  };
+
+  const removeArtist = (i) => {
+    if (!confirm('Удалить этого художника?')) return;
+    setForm(f => ({ ...f, artists: f.artists.filter((_, idx) => idx !== i) }));
+  };
+
+  const uploadPhoto = async (i, file) => {
+    try {
+      const r = await API.upload(file);
+      updateArtist(i, 'photo', r.url);
+    } catch (e) { alert('Ошибка загрузки: ' + e.message); }
+  };
+
+  const save = async () => {
+    setBusy(true);
+    try { await store.setAbout(form); alert('Сохранено'); }
     catch (e) { alert('Ошибка: ' + e.message); }
+    finally { setBusy(false); }
   };
 
   return (
-    <div className="max-w-3xl space-y-6">
-      <Field label="Имя" value={form.name||''} onChange={v => set('name', v)} />
-      <div className="flex items-end gap-3">
-        <div className="flex-1"><Field label="URL фотографии" value={form.photo||''} onChange={v => set('photo', v)} /></div>
-        <label className="text-xs cursor-pointer px-3 py-2 mb-1 rounded-full border hairline hover:border-ink whitespace-nowrap">
-          Загрузить
-          <input type="file" accept="image/*" className="hidden"
-            onChange={e => { const f = e.target.files?.[0]; if (f) uploadPhoto(f); }}/>
-        </label>
+    <div className="max-w-4xl space-y-10">
+      <div className="flex items-center justify-between">
+        <h3 className="font-display text-2xl">Художники</h3>
+        <button
+          onClick={addArtist}
+          className="bg-ink text-paper px-5 py-2.5 rounded-full text-sm hover:bg-accent transition"
+        >
+          + Добавить художника
+        </button>
       </div>
-      <Field label="Краткая биография" textarea value={form.shortBio||''} onChange={v => set('shortBio', v)} />
-      <Field label="Образование" textarea value={form.education||''} onChange={v => set('education', v)} />
-      <Field label="Практика" textarea value={form.practice||''} onChange={v => set('practice', v)} />
-      <Field label="Выставки (по одной на строку)" textarea
-        value={(form.exhibitions||[]).join('\n')}
-        onChange={v => set('exhibitions', v.split('\n').filter(Boolean))} />
-      <button disabled={busy} onClick={async () => {
-        setBusy(true);
-        try { await store.setAbout(form); alert('Сохранено'); }
-        catch (e) { alert('Ошибка: ' + e.message); }
-        finally { setBusy(false); }
-      }} className="bg-ink text-paper px-6 py-3 rounded-full hover:bg-accent transition disabled:opacity-50">Сохранить</button>
+
+      {artists.map((artist, i) => (
+        <div key={i} className="border hairline rounded-2xl p-6 space-y-6 bg-white/40">
+          <div className="flex items-center justify-between">
+            <div className="text-[11px] uppercase tracking-[0.3em] text-muted">
+              Художник №{i + 1}
+            </div>
+            {artists.length > 1 && (
+              <button
+                onClick={() => removeArtist(i)}
+                className="text-red-600 hover:underline text-sm"
+              >
+                Удалить
+              </button>
+            )}
+          </div>
+
+          <Field
+            label="Имя"
+            value={artist.name || ''}
+            onChange={v => updateArtist(i, 'name', v)}
+          />
+
+          <div className="flex items-end gap-3">
+            <div className="flex-1">
+              <Field
+                label="URL фотографии"
+                value={artist.photo || ''}
+                onChange={v => updateArtist(i, 'photo', v)}
+              />
+            </div>
+            <label className="text-xs cursor-pointer px-3 py-2 mb-1 rounded-full border hairline hover:border-ink whitespace-nowrap">
+              Загрузить
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={e => {
+                  const f = e.target.files?.[0];
+                  if (f) uploadPhoto(i, f);
+                }}
+              />
+            </label>
+          </div>
+
+          <div>
+            <Field
+              label="Краткая биография (Enter = перенос строки)"
+              textarea
+              value={artist.shortBio || ''}
+              onChange={v => updateArtist(i, 'shortBio', v)}
+            />
+            <div className="text-xs text-muted mt-1">
+              Каждая новая строка появится на сайте как отдельная строка.
+            </div>
+          </div>
+
+          <div>
+            <Field
+              label="Образование (Enter = перенос строки)"
+              textarea
+              value={artist.education || ''}
+              onChange={v => updateArtist(i, 'education', v)}
+            />
+          </div>
+        </div>
+      ))}
+
+      <button
+        disabled={busy}
+        onClick={save}
+        className="bg-ink text-paper px-6 py-3 rounded-full hover:bg-accent transition disabled:opacity-50"
+      >
+        {busy ? 'Сохранение…' : 'Сохранить'}
+      </button>
     </div>
   );
 }
@@ -1313,16 +1644,16 @@ function App() {
     const route = window.location.hash.replace(/^#/, '') || '/';
     const titles = {
       '/': 'Atelier — портфолио художника',
-      '/about': 'О нас — Anna Morozova',
-      '/techniques': 'По техникам — Anna Morozova',
-      '/originals': 'Оригиналы — Anna Morozova',
-      '/engravings': 'Гравюры — Anna Morozova',
-      '/reproductions': 'Репродукции — Anna Morozova',
-      '/series': 'Серии — Anna Morozova',
-      '/contacts': 'Контакты — Anna Morozova',
+      '/about': 'О нас — Studio asnieres',
+      '/techniques': 'По техникам — Studio asnieres',
+      '/originals': 'Оригиналы — Studio asnieres',
+      '/engravings': 'Гравюры — Studio asnieres',
+      '/reproductions': 'Репродукции — Studio asnieres',
+      '/series': 'Серии — Studio asnieres',
+      '/contacts': 'Контакты — Studio asnieres',
       '/admin': 'Админ-панель',
     };
-    document.title = titles[route] || 'Anna Morozova — Portfolio';
+    document.title = titles[route] || 'Studio asnieres — Portfolio';
   });
 
   return (

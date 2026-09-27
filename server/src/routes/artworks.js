@@ -214,7 +214,7 @@ router.put('/:id', requireAuth, (req, res) => {
         featured = ?,
         sheet_height = ?, sheet_width = ?, image_height = ?, image_width = ?,
         edition = ?, copy_number = ?, signed = ?,
-        original_title = ?, repro_type = ?, print_material = ?,
+        original_title = ?, repro_type = ?, print_material = ?,series = ?,
         meta_title = ?, meta_description = ?,
         updated_at = datetime('now')
       WHERE id = ?

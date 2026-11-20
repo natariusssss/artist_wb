@@ -2,8 +2,11 @@ import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import { db } from './db.js';
 
-const email = process.env.ADMIN_EMAIL || 'admin@studio.art';
-const password = process.env.ADMIN_PASSWORD || 'admin123';
+const email = process.env.ADMIN_EMAIL;
+const password = process.env.ADMIN_PASSWORD;
+if (!email || !password || password.length < 12) {
+  throw new Error('Для seed задайте ADMIN_EMAIL и ADMIN_PASSWORD (не менее 12 символов) в .env');
+}
 
 const hash = bcrypt.hashSync(password, 10);
 db.prepare(`
@@ -51,5 +54,4 @@ insPage.run('about', JSON.stringify(about));
 insPage.run('contacts', JSON.stringify(contacts));
 
 console.log('✅ Seed готов');
-console.log(`   Логин: ${email}`);
-console.log(`   Пароль: ${password}`);
+console.log('   Учётные данные администратора не выводятся в лог.');

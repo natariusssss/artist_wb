@@ -8,11 +8,12 @@ fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const ALLOWED = new Set(['image/jpeg','image/png','image/webp','image/avif','image/tiff']);
 const MAX_MB = Number(process.env.MAX_UPLOAD_MB || 15);
+const EXTENSIONS = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/avif': '.avif', 'image/tiff': '.tiff' };
 
 const storage = multer.diskStorage({
   destination: (_, __, cb) => cb(null, UPLOAD_DIR),
   filename: (_, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+    const ext = EXTENSIONS[file.mimetype] || '.jpg';
     const name = crypto.randomBytes(12).toString('hex') + ext;
     cb(null, name);
   }

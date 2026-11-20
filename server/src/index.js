@@ -15,6 +15,10 @@ import { errorHandler } from './middleware/error.js';
 import contactRouter from './routes/contact.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+  throw new Error('JWT_SECRET обязателен: задайте случайную строку длиной не менее 32 символов');
+}
+
 const app = express();
 
 app.use(helmet({
@@ -52,6 +56,6 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`🎨 Server: http://localhost:${PORT}`);
-  console.log(`🔐 Логин: ${process.env.ADMIN_EMAIL} / ${process.env.ADMIN_PASSWORD}`);
+  console.log('🔐 Админ-панель доступна по адресу /admin');
 });
 

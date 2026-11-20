@@ -15,6 +15,10 @@ import { errorHandler } from './middleware/error.js';
 import contactRouter from './routes/contact.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+  throw new Error('JWT_SECRET обязателен: задайте случайную строку длиной не менее 32 символов');
+}
+
 const app = express();
 
 app.use(helmet({

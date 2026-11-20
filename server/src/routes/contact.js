@@ -2,6 +2,7 @@ import { Router } from 'express';
 import nodemailer from 'nodemailer';
 import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
+import { db } from '../db.js';
 
 const router = Router();
 
@@ -38,6 +39,10 @@ router.post('/', contactLimiter, async (req, res, next) => {
     }
 
     const { name, email, message, artwork } = parsed.data;
+    const artworkRow = artwork
+      ? db.prepare('SELECT title FROM artworks WHERE slug = ?').get(artwork)
+      : null;
+    const artworkTitle = artworkRow?.title || null;
 
     const { SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, CONTACT_TO } = process.env;
     if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS || !CONTACT_TO) {
@@ -51,14 +56,14 @@ router.post('/', contactLimiter, async (req, res, next) => {
       auth: { user: SMTP_USER, pass: SMTP_PASS },
     });
 
-    const subjectArtwork = artwork ? ` по работе «${artwork}»` : '';
+    const subjectArtwork = artworkTitle ? ` по работе «${artworkTitle}»` : '';
     const subject = `Новое сообщение с сайта${subjectArtwork} — от ${name}`;
 
     const html = `
       <div style="font-family: -apple-system, Arial, sans-serif; max-width: 600px; color:#1a1a1a;">
         <h2 style="font-family: Georgia, serif; font-weight: 400;">Новое сообщение с сайта</h2>
         <p><strong>От:</strong> ${escapeHtml(name)} &lt;${escapeHtml(email)}&gt;</p>
-        ${artwork ? `<p><strong>Работа:</strong> ${escapeHtml(artwork)}</p>` : ''}
+        ${artworkTitle ? `<p><strong>Работа:</strong> ${escapeHtml(artworkTitle)}</p>` : ''}
         <hr style="border:none; border-top:1px solid #eee;" />
         <p style="white-space: pre-line; line-height:1.6;">${escapeHtml(message)}</p>
         <hr style="border:none; border-top:1px solid #eee;" />

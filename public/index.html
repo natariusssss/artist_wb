@@ -508,8 +508,10 @@ function ArtworkCard({ artwork, onClick }) {
             <div className="text-xs text-muted mt-0.5">{artwork.height}×{artwork.width} см</div>
           )}
         </div>
-        {artwork.status === 'available' && artwork.price && (
-          <div className="text-sm whitespace-nowrap">{artwork.price} {artwork.currency}</div>
+        {artwork.status === 'available' && (
+          <div className="text-sm whitespace-nowrap">
+            {artwork.price != null ? `${artwork.price} ${artwork.currency}` : 'По запросу'}
+          </div>
         )}
       </div>
     </article>
@@ -887,7 +889,11 @@ function ArtworkPage({ slug }) {
             <h1 className="font-display text-4xl md:text-5xl mt-3 leading-[1.05]">{a.title}</h1>
             <div className="mt-4 flex items-center gap-4">
               <StatusBadge status={a.status} />
-              {a.status === 'available' && a.price && <div className="text-lg">{a.price} {a.currency}</div>}
+              {a.status === 'available' && (
+                <div className="text-lg">
+                  {a.price != null ? `${a.price} ${a.currency}` : t('artwork.priceOnRequest')}
+                </div>
+              )}
             </div>
             <p className="mt-8 text-muted leading-relaxed">{a.description}</p>
 
@@ -907,7 +913,7 @@ function ArtworkPage({ slug }) {
                   {a.availableSizes.map((s, i) => (
                     <div key={i} className="flex items-center justify-between border hairline rounded-xl px-4 py-3">
                       <div className="text-sm">{s.label}</div>
-                      <div className="text-sm">{s.price} {a.currency}</div>
+                      <div className="text-sm">{s.price != null ? `${s.price} ${a.currency}` : t('artwork.priceOnRequest')}</div>
                     </div>
                   ))}
                 </div>

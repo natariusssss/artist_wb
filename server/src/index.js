@@ -52,6 +52,6 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`🎨 Server: http://localhost:${PORT}`);
-  console.log(`🔐 Логин: ${process.env.ADMIN_EMAIL} / ${process.env.ADMIN_PASSWORD}`);
+  console.log('🔐 Админ-панель доступна по адресу /admin');
 });
 

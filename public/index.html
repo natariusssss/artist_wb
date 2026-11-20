@@ -491,6 +491,7 @@ function LazyImage({ src, alt, className = '', ratio, fit = 'cover' }) {
 }
 
 function ArtworkCard({ artwork, onClick }) {
+  const { t } = useTranslation();
   const cover = artwork.images?.[0];
   return (
     <article className="group cursor-pointer fade-in" onClick={onClick}>
@@ -510,7 +511,7 @@ function ArtworkCard({ artwork, onClick }) {
         </div>
         {artwork.status === 'available' && (
           <div className="text-sm whitespace-nowrap">
-            {artwork.price != null ? `${artwork.price} ${artwork.currency}` : 'По запросу'}
+            {artwork.price != null ? `${artwork.price} ${artwork.currency}` : t('artwork.priceOnRequest')}
           </div>
         )}
       </div>

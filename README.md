@@ -16,7 +16,7 @@ A multilingual artist portfolio and artwork catalogue with an admin panel and pu
    npm install
    ```
 
-2. Copy `server/.env.example` to `server/.env` and fill in the required values. Generate a unique `JWT_SECRET` (at least 32 characters) and a unique administrator password (at least 12 characters).
+2. Copy `.env.example` to `.env` in the repository root and fill in the required values. Generate a unique `JWT_SECRET` (at least 32 characters) and a unique administrator password (at least 12 characters).
 
 3. Initialize the administrator and default content:
 

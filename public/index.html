@@ -508,8 +508,10 @@ function ArtworkCard({ artwork, onClick }) {
             <div className="text-xs text-muted mt-0.5">{artwork.height}×{artwork.width} см</div>
           )}
         </div>
-        {artwork.status === 'available' && artwork.price && (
-          <div className="text-sm whitespace-nowrap">{artwork.price} {artwork.currency}</div>
+        {artwork.status === 'available' && (
+          <div className="text-sm whitespace-nowrap">
+            {artwork.price ? `${artwork.price} ${artwork.currency}` : 'Цена по запросу'}
+          </div>
         )}
       </div>
     </article>
@@ -596,7 +598,7 @@ function HomePage() {
           action={<button onClick={() => navigate('/originals')} className="text-sm inline-flex items-center gap-2 hover:text-accent">{t('common.viewAll')} <Icon.Arrow className="w-4 h-4"/></button>}
         />
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-14">
-          {store.listArtworks().slice(0,6).map(a => (
+          {store.listArtworks({ featured: true }).slice(0,6).map(a => (
             <ArtworkCard key={a.id} artwork={a} onClick={() => navigate(`/artworks/${a.slug}`)} />
           ))}
         </div>
@@ -887,9 +889,16 @@ function ArtworkPage({ slug }) {
             <h1 className="font-display text-4xl md:text-5xl mt-3 leading-[1.05]">{a.title}</h1>
             <div className="mt-4 flex items-center gap-4">
               <StatusBadge status={a.status} />
-              {a.status === 'available' && a.price && <div className="text-lg">{a.price} {a.currency}</div>}
+              {a.status === 'available' && (
+                <div className="text-lg">{a.price ? `${a.price} ${a.currency}` : 'Стоимость по запросу'}</div>
+              )}
             </div>
             <p className="mt-8 text-muted leading-relaxed">{a.description}</p>
+            {a.status === 'available' && (
+              <p className="mt-4 text-xs leading-relaxed text-muted">
+                Напишите, чтобы уточнить детали, доступность и варианты доставки. Ответим лично.
+              </p>
+            )}
 
             <dl className="mt-10 divide-y hairline border-t hairline">
               {spec.map(([k,v], i) => (
@@ -919,7 +928,7 @@ function ArtworkPage({ slug }) {
                 onClick={() => navigate(`/contacts?artwork=${encodeURIComponent(a.slug)}&title=${encodeURIComponent(a.title)}`)}
                 className="mt-8 w-full bg-ink text-paper py-4 rounded-full hover:bg-accent transition"
               >
-                {t('artwork.request')}
+                {a.price ? 'Запросить покупку' : 'Уточнить цену и наличие'}
               </button>
             )}
 

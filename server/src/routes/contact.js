@@ -50,11 +50,14 @@ router.post('/', contactLimiter, async (req, res, next) => {
     }
 
     const transporter = nodemailer.createTransport({
-      host: SMTP_HOST,
-      port: Number(SMTP_PORT) || 587,
-      secure: SMTP_SECURE === 'true',
-      auth: { user: SMTP_USER, pass: SMTP_PASS },
-    });
+  host: SMTP_HOST,
+  port: Number(SMTP_PORT) || 587,
+  secure: SMTP_SECURE === 'true',
+  auth: { user: SMTP_USER, pass: SMTP_PASS },
+  tls: {
+    servername: 'smtp.gmail.com',
+  },
+});
 
     const subjectArtwork = artworkTitle ? ` по работе «${artworkTitle}»` : '';
     const subject = `Новое сообщение с сайта${subjectArtwork} — от ${name}`;

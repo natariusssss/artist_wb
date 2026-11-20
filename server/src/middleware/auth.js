@@ -1,6 +1,9 @@
 import jwt from 'jsonwebtoken';
 
-const SECRET = process.env.JWT_SECRET || 'dev_secret_change_me';
+const SECRET = process.env.JWT_SECRET;
+if (!SECRET || SECRET.length < 32) {
+  throw new Error('JWT_SECRET должен быть задан в окружении и содержать не менее 32 символов');
+}
 
 export function signToken(user) {
   return jwt.sign(
